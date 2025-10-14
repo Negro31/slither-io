@@ -1,1 +1,43 @@
+```html
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Slither.io Clone</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  
+  <!-- Giriş Ekranı -->
+  <div id="loginScreen">
+    <div class="loginBox">
+      <h1>SLITHER.IO</h1>
+      <input type="text" id="nameInput" placeholder="İsmini Gir" maxlength="15" autocomplete="off">
+      <button id="joinButton">Katıl</button>
+    </div>
+  </div>
 
+  <!-- Oyun Ekranı -->
+  <div id="gameScreen" style="display: none;">
+    <canvas id="gameCanvas"></canvas>
+    
+    <!-- Skor Tablosu -->
+    <div id="leaderboard">
+      <h3>Lider Tablosu</h3>
+      <ol id="leaderboardList"></ol>
+    </div>
+    
+    <!-- Mobil Joystick -->
+    <div id="joystickContainer">
+      <div id="joystickBase"></div>
+      <div id="joystickStick"></div>
+    </div>
+  </div>
+
+  <!-- Socket.io Client -->
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="script.js"></script>
+</body>
+</html>
+```
