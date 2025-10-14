@@ -1,5 +1,5 @@
 // ============================================
-// SERVER.JS - Node.js Backend (Express + Socket.io)
+// SERVER.JS - Optimized Backend
 // ============================================
 
 const express = require('express');
@@ -9,24 +9,29 @@ const path = require('path');
 
 const app = express();
 const server = http.createServer(app);
-const io = socketIo(server);
+const io = socketIo(server, {
+  pingTimeout: 60000,
+  pingInterval: 25000
+});
 
 app.use(express.static(path.join(__dirname, 'public')));
 
 // Oyun sabitleri
 const CONFIG = {
-  MAP_WIDTH: 2000,
-  MAP_HEIGHT: 2000,
-  FOOD_COUNT: 200,
-  SNAKE_SPEED: 2.5,
+  MAP_WIDTH: 3000,
+  MAP_HEIGHT: 3000,
+  FOOD_COUNT: 300,
+  SNAKE_SPEED: 3,
   SEGMENT_SIZE: 10,
   FOOD_SIZE: 6,
-  TICK_RATE: 30,
-  SPAWN_MARGIN: 300 // Guvenli spawn alani
+  TICK_RATE: 50, // 20 FPS server tick
+  SPAWN_MARGIN: 400,
+  COLLISION_THRESHOLD: 8
 };
 
 let players = {};
 let foods = [];
+let deadSnakeFoods = {}; // Olen yilan yemleri - zamana bagli temizleme
 
 function randomPos(max) {
   return Math.floor(Math.random() * max);
@@ -41,6 +46,7 @@ function initFoods() {
   foods = [];
   for (let i = 0; i < CONFIG.FOOD_COUNT; i++) {
     foods.push({
+      id: 'food_' + i,
       x: randomPos(CONFIG.MAP_WIDTH),
       y: randomPos(CONFIG.MAP_HEIGHT),
       color: randomColor()
@@ -48,7 +54,6 @@ function initFoods() {
   }
 }
 
-// Guvenli spawn konumu bul
 function findSafeSpawnPosition() {
   let attempts = 0;
   const maxAttempts = 50;
@@ -57,7 +62,6 @@ function findSafeSpawnPosition() {
     const x = randomPos(CONFIG.MAP_WIDTH - CONFIG.SPAWN_MARGIN * 2) + CONFIG.SPAWN_MARGIN;
     const y = randomPos(CONFIG.MAP_HEIGHT - CONFIG.SPAWN_MARGIN * 2) + CONFIG.SPAWN_MARGIN;
     
-    // Diger yilanlardan uzakta mi kontrol et
     let isSafe = true;
     for (let id in players) {
       if (!players[id].snake.alive) continue;
@@ -65,7 +69,7 @@ function findSafeSpawnPosition() {
       const otherHead = players[id].snake.segments[0];
       const distance = Math.hypot(x - otherHead.x, y - otherHead.y);
       
-      if (distance < 200) { // En az 200 piksel uzakta
+      if (distance < 300) {
         isSafe = false;
         break;
       }
@@ -78,7 +82,6 @@ function findSafeSpawnPosition() {
     attempts++;
   }
   
-  // Eger guvenli yer bulunamazsa haritanin ortasina spawn et
   return {
     x: CONFIG.MAP_WIDTH / 2,
     y: CONFIG.MAP_HEIGHT / 2
@@ -87,40 +90,47 @@ function findSafeSpawnPosition() {
 
 function createSnake(name) {
   const spawnPos = findSafeSpawnPosition();
+  const angle = Math.random() * Math.PI * 2;
   
   return {
     segments: [
       { x: spawnPos.x, y: spawnPos.y },
-      { x: spawnPos.x - CONFIG.SEGMENT_SIZE, y: spawnPos.y },
-      { x: spawnPos.x - CONFIG.SEGMENT_SIZE * 2, y: spawnPos.y }
+      { x: spawnPos.x - Math.cos(angle) * CONFIG.SEGMENT_SIZE, y: spawnPos.y - Math.sin(angle) * CONFIG.SEGMENT_SIZE },
+      { x: spawnPos.x - Math.cos(angle) * CONFIG.SEGMENT_SIZE * 2, y: spawnPos.y - Math.sin(angle) * CONFIG.SEGMENT_SIZE * 2 }
     ],
-    direction: { x: 1, y: 0 },
+    direction: { x: Math.cos(angle), y: Math.sin(angle) },
     color: randomColor(),
-    alive: true
+    alive: true,
+    spawnTime: Date.now()
   };
 }
 
 function checkCollision(snake, allPlayers, playerId) {
   const head = snake.segments[0];
   
-  // Harita sinirlari - daha toleransli
-  if (head.x < 20 || head.x > CONFIG.MAP_WIDTH - 20 || 
-      head.y < 20 || head.y > CONFIG.MAP_HEIGHT - 20) {
+  // Spawn koruması - ilk 2 saniye carpisma yok
+  if (Date.now() - snake.spawnTime < 2000) {
+    return false;
+  }
+  
+  // Harita sinirlari - KESIN sinir
+  if (head.x <= 50 || head.x >= CONFIG.MAP_WIDTH - 50 || 
+      head.y <= 50 || head.y >= CONFIG.MAP_HEIGHT - 50) {
     return true;
   }
   
-  // Diger yilanlarla carpisma
+  // Sadece CANLI yilanlarla carpisma kontrol et
   for (let id in allPlayers) {
     const other = allPlayers[id];
-    if (!other.snake.alive) continue;
+    if (!other.snake.alive) continue; // OLEN YILANLARI ATLA
     
-    // Kendi govdemizle carpismak icin en az 5 segment gerekli
-    const startIdx = (id === playerId) ? Math.min(5, other.snake.segments.length) : 0;
+    // Kendi govdemizle carpismak icin en az 10 segment sonrasini kontrol et
+    const startIdx = (id === playerId) ? 10 : 0;
     
     for (let i = startIdx; i < other.snake.segments.length; i++) {
       const seg = other.snake.segments[i];
       const dist = Math.hypot(head.x - seg.x, head.y - seg.y);
-      if (dist < CONFIG.SEGMENT_SIZE - 2) { // Daha hassas carpisma
+      if (dist < CONFIG.COLLISION_THRESHOLD) {
         return true;
       }
     }
@@ -135,7 +145,7 @@ function checkFoodCollision(snake) {
   
   foods.forEach((food, idx) => {
     const dist = Math.hypot(head.x - food.x, head.y - food.y);
-    if (dist < CONFIG.SEGMENT_SIZE + 2) { // Daha kolay yem yeme
+    if (dist < CONFIG.SEGMENT_SIZE + 4) {
       eatenIndices.push(idx);
     }
   });
@@ -161,6 +171,16 @@ function growSnake(snake, count) {
   }
 }
 
+// Olen yilan yemlerini temizle (10 saniye sonra)
+function cleanupDeadSnakeFoods() {
+  const now = Date.now();
+  for (let id in deadSnakeFoods) {
+    if (now - deadSnakeFoods[id].timestamp > 10000) {
+      delete deadSnakeFoods[id];
+    }
+  }
+}
+
 function gameLoop() {
   for (let id in players) {
     const player = players[id];
@@ -175,6 +195,7 @@ function gameLoop() {
       
       eatenFoods.forEach(idx => {
         foods[idx] = {
+          id: 'food_' + Date.now() + '_' + idx,
           x: randomPos(CONFIG.MAP_WIDTH),
           y: randomPos(CONFIG.MAP_HEIGHT),
           color: randomColor()
@@ -185,31 +206,49 @@ function gameLoop() {
     if (checkCollision(player.snake, players, id)) {
       player.snake.alive = false;
       
-      player.snake.segments.forEach(seg => {
-        foods.push({
-          x: seg.x,
-          y: seg.y,
-          color: player.snake.color
-        });
+      // Yilani yeme donustur - ama carpisma kontrolunden cikar
+      const deathFoods = [];
+      player.snake.segments.forEach((seg, idx) => {
+        if (idx % 2 === 0) { // Her 2 segmentten 1 yem
+          deathFoods.push({
+            id: 'death_' + id + '_' + idx,
+            x: seg.x,
+            y: seg.y,
+            color: player.snake.color
+          });
+        }
       });
       
+      foods.push(...deathFoods);
+      deadSnakeFoods[id] = { timestamp: Date.now() };
+      
       io.to(id).emit('death');
+      
+      // Olu oyuncuyu sil
+      setTimeout(() => {
+        delete players[id];
+      }, 100);
+    }
+  }
+  
+  cleanupDeadSnakeFoods();
+  
+  // Sadece canli oyunculari gonder
+  const activePlayers = {};
+  for (let id in players) {
+    if (players[id].snake.alive) {
+      activePlayers[id] = {
+        name: players[id].name,
+        segments: players[id].snake.segments,
+        color: players[id].snake.color,
+        score: players[id].score
+      };
     }
   }
   
   io.emit('gameState', {
-    players: Object.keys(players).reduce((acc, id) => {
-      if (players[id].snake.alive) {
-        acc[id] = {
-          name: players[id].name,
-          segments: players[id].snake.segments,
-          color: players[id].snake.color,
-          score: players[id].score
-        };
-      }
-      return acc;
-    }, {}),
-    foods: foods
+    players: activePlayers,
+    foods: foods.slice(0, 500) // Performans icin max 500 yem
   });
 }
 
@@ -223,8 +262,6 @@ io.on('connection', (socket) => {
       score: 3
     };
     
-    console.log('Player spawned:', playerName, 'at', players[socket.id].snake.segments[0]);
-    
     socket.emit('init', {
       playerId: socket.id,
       mapWidth: CONFIG.MAP_WIDTH,
@@ -235,7 +272,7 @@ io.on('connection', (socket) => {
   socket.on('changeDirection', (direction) => {
     if (players[socket.id] && players[socket.id].snake.alive) {
       const len = Math.hypot(direction.x, direction.y);
-      if (len > 0) {
+      if (len > 0.1) { // Minimum hareket esigi
         players[socket.id].snake.direction = {
           x: direction.x / len,
           y: direction.y / len
