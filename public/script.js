@@ -256,3 +256,4 @@ function render() {
 function startGame() {
   render();
 }
+'''
