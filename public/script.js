@@ -1,5 +1,5 @@
 // ============================================
-// SCRIPT.JS - Optimized Client
+// SCRIPT.JS - Final Optimized Client
 // ============================================
 
 const loginScreen = document.getElementById('loginScreen');
@@ -11,6 +11,7 @@ const ctx = canvas.getContext('2d');
 const leaderboardList = document.getElementById('leaderboardList');
 const joystickContainer = document.getElementById('joystickContainer');
 const joystickStick = document.getElementById('joystickStick');
+const boostButton = document.getElementById('boostButton');
 
 let socket;
 let myPlayerId = null;
@@ -18,11 +19,13 @@ let gameState = { players: {}, foods: [] };
 let interpolatedPlayers = {};
 let mapWidth = 3000;
 let mapHeight = 3000;
+let mapBorder = 100;
 let camera = { x: 0, y: 0 };
 let mouseDirection = { x: 1, y: 0 };
 let isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+let isBoosting = false;
 
-// FPS sayaci
+// FPS
 let fps = 0;
 let frameCount = 0;
 let lastFpsUpdate = Date.now();
@@ -39,10 +42,12 @@ joinButton.addEventListener('click', () => {
   socket = io({
     reconnection: true,
     reconnectionDelay: 1000,
-    reconnectionAttempts: 5
+    reconnectionAttempts: 10,
+    transports: ['websocket', 'polling']
   });
   
   socket.on('connect', () => {
+    console.log('Connected to server');
     socket.emit('join', name);
   });
   
@@ -50,6 +55,7 @@ joinButton.addEventListener('click', () => {
     myPlayerId = data.playerId;
     mapWidth = data.mapWidth;
     mapHeight = data.mapHeight;
+    mapBorder = data.mapBorder;
     loginScreen.style.display = 'none';
     gameScreen.style.display = 'block';
     startGame();
@@ -58,7 +64,6 @@ joinButton.addEventListener('click', () => {
   socket.on('gameState', (state) => {
     gameState = state;
     
-    // Interpolation icin onceki pozisyonlari sakla
     for (let id in state.players) {
       if (!interpolatedPlayers[id]) {
         interpolatedPlayers[id] = JSON.parse(JSON.stringify(state.players[id]));
@@ -68,11 +73,15 @@ joinButton.addEventListener('click', () => {
     updateLeaderboard();
   });
   
-  socket.on('death', () => {
+  socket.on('death', (finalScore) => {
     setTimeout(() => {
-      alert('You died! Score: ' + (gameState.players[myPlayerId]?.score || 0));
+      alert('You died! Final Score: ' + finalScore);
       location.reload();
     }, 100);
+  });
+  
+  socket.on('disconnect', () => {
+    console.log('Disconnected from server');
   });
 });
 
@@ -95,6 +104,59 @@ canvas.addEventListener('mousemove', (e) => {
     mouseDirection = { x: dx / len, y: dy / len };
     socket.emit('changeDirection', mouseDirection);
   }
+});
+
+// Mouse boost (sol tik veya space)
+canvas.addEventListener('mousedown', (e) => {
+  if (!myPlayerId || isMobile) return;
+  if (e.button === 0) { // Sol tik
+    isBoosting = true;
+    socket.emit('boost', true);
+  }
+});
+
+canvas.addEventListener('mouseup', (e) => {
+  if (!myPlayerId || isMobile) return;
+  if (e.button === 0) {
+    isBoosting = false;
+    socket.emit('boost', false);
+  }
+});
+
+// Space tusu ile hizlanma
+document.addEventListener('keydown', (e) => {
+  if (!myPlayerId || isMobile) return;
+  if (e.code === 'Space' && !isBoosting) {
+    e.preventDefault();
+    isBoosting = true;
+    socket.emit('boost', true);
+  }
+});
+
+document.addEventListener('keyup', (e) => {
+  if (!myPlayerId || isMobile) return;
+  if (e.code === 'Space') {
+    e.preventDefault();
+    isBoosting = false;
+    socket.emit('boost', false);
+  }
+});
+
+// Mobil boost button
+boostButton.addEventListener('touchstart', (e) => {
+  if (!isMobile) return;
+  e.preventDefault();
+  isBoosting = true;
+  boostButton.classList.add('active');
+  socket.emit('boost', true);
+});
+
+boostButton.addEventListener('touchend', (e) => {
+  if (!isMobile) return;
+  e.preventDefault();
+  isBoosting = false;
+  boostButton.classList.remove('active');
+  socket.emit('boost', false);
 });
 
 // Joystick
@@ -147,7 +209,6 @@ joystickContainer.addEventListener('touchstart', handleJoystickStart, { passive:
 joystickContainer.addEventListener('touchmove', handleJoystickMove, { passive: false });
 joystickContainer.addEventListener('touchend', handleJoystickEnd, { passive: false });
 
-// Kamera
 function updateCamera() {
   const player = gameState.players[myPlayerId];
   if (!player) return;
@@ -158,7 +219,6 @@ function updateCamera() {
   camera.y += (head.y - camera.y) * lerpFactor;
 }
 
-// Leaderboard
 function updateLeaderboard() {
   const sorted = Object.entries(gameState.players)
     .sort((a, b) => b[1].score - a[1].score)
@@ -172,32 +232,22 @@ function updateLeaderboard() {
     .join('');
 }
 
-// Harita siniri cizimi
 function drawMapBorder() {
-  const borderWidth = 50;
-  
-  // Sinir cizgileri
   ctx.strokeStyle = '#FF0000';
   ctx.lineWidth = 5;
   
-  const x1 = borderWidth - camera.x + canvas.width / 2;
-  const y1 = borderWidth - camera.y + canvas.height / 2;
-  const x2 = mapWidth - borderWidth - camera.x + canvas.width / 2;
-  const y2 = mapHeight - borderWidth - camera.y + canvas.height / 2;
+  const x1 = mapBorder - camera.x + canvas.width / 2;
+  const y1 = mapBorder - camera.y + canvas.height / 2;
+  const x2 = mapWidth - mapBorder - camera.x + canvas.width / 2;
+  const y2 = mapHeight - mapBorder - camera.y + canvas.height / 2;
   
   ctx.strokeRect(x1, y1, x2 - x1, y2 - y1);
   
-  // Tehlike bolgeleri (kirmizi golge)
-  ctx.fillStyle = 'rgba(255, 0, 0, 0.1)';
-  
-  // Ust
-  ctx.fillRect(x1, y1 - borderWidth, x2 - x1, borderWidth);
-  // Alt
-  ctx.fillRect(x1, y2, x2 - x1, borderWidth);
-  // Sol
-  ctx.fillRect(x1 - borderWidth, y1, borderWidth, y2 - y1);
-  // Sag
-  ctx.fillRect(x2, y1, borderWidth, y2 - y1);
+  ctx.fillStyle = 'rgba(255, 0, 0, 0.15)';
+  ctx.fillRect(x1, y1 - mapBorder, x2 - x1, mapBorder);
+  ctx.fillRect(x1, y2, x2 - x1, mapBorder);
+  ctx.fillRect(x1 - mapBorder, y1, mapBorder, y2 - y1);
+  ctx.fillRect(x2, y1, mapBorder, y2 - y1);
 }
 
 function drawGrid() {
@@ -228,7 +278,6 @@ function drawFoods() {
     const screenX = food.x - camera.x + canvas.width / 2;
     const screenY = food.y - camera.y + canvas.height / 2;
     
-    // Ekran disindaki yemleri cizme
     if (screenX < -20 || screenX > canvas.width + 20 || 
         screenY < -20 || screenY > canvas.height + 20) {
       return;
@@ -242,7 +291,6 @@ function drawFoods() {
 }
 
 function drawSnake(player, isMe) {
-  // Interpolation
   if (!isMe && interpolatedPlayers[player.name]) {
     const interp = interpolatedPlayers[player.name];
     player.segments.forEach((seg, idx) => {
@@ -258,12 +306,24 @@ function drawSnake(player, isMe) {
     const screenX = seg.x - camera.x + canvas.width / 2;
     const screenY = seg.y - camera.y + canvas.height / 2;
     
+    // Hizlanma efekti
+    const segmentSize = (player.boosting && isMe) ? 9 : 10;
+    
     ctx.fillStyle = player.color;
     ctx.strokeStyle = isMe ? '#fff' : 'rgba(0, 0, 0, 0.3)';
     ctx.lineWidth = isMe ? 2 : 1;
     
+    // Hizlanma parcaciklari
+    if (player.boosting && isMe && idx % 3 === 0) {
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+      ctx.beginPath();
+      ctx.arc(screenX, screenY, 12, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    
+    ctx.fillStyle = player.color;
     ctx.beginPath();
-    ctx.arc(screenX, screenY, 10, 0, Math.PI * 2);
+    ctx.arc(screenX, screenY, segmentSize, 0, Math.PI * 2);
     ctx.fill();
     ctx.stroke();
     
@@ -289,12 +349,20 @@ function drawSnake(player, isMe) {
   ctx.fillText(player.name, screenX, screenY);
 }
 
-// FPS gosterimi
 function drawFPS() {
   ctx.fillStyle = '#0F0';
   ctx.font = 'bold 16px monospace';
   ctx.textAlign = 'left';
   ctx.fillText('FPS: ' + fps, 10, 30);
+  
+  const player = gameState.players[myPlayerId];
+  if (player) {
+    ctx.fillText('Length: ' + player.score, 10, 50);
+    if (player.boosting) {
+      ctx.fillStyle = '#FF0';
+      ctx.fillText('BOOSTING!', 10, 70);
+    }
+  }
 }
 
 function render() {
@@ -331,4 +399,4 @@ function render() {
 
 function startGame() {
   render();
-}
+  }
