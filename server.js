@@ -1,9 +1,9 @@
-```javascript
+javascript
 // ============================================
 // SERVER.JS - Node.js Backend (Express + Socket.io)
 // ============================================
-// Render deployment: Bu dosya otomatik çalışacak
-// PORT environment variable Render tarafından sağlanır
+// Render deployment: Bu dosya otomatik calisacak
+// PORT environment variable Render tarafindan saglanir
 
 const express = require('express');
 const http = require('http');
@@ -14,7 +14,7 @@ const app = express();
 const server = http.createServer(app);
 const io = socketIo(server);
 
-// Static dosyaları sunma
+// Static dosyalari sunma
 app.use(express.static(path.join(__dirname, 'public')));
 
 // Oyun sabitleri
@@ -32,18 +32,18 @@ const CONFIG = {
 let players = {}; // { socketId: { snake, name, score } }
 let foods = [];
 
-// Rastgele konum üretici
+// Rastgele konum uretici
 function randomPos(max) {
   return Math.floor(Math.random() * max);
 }
 
-// Rastgele renk üretici
+// Rastgele renk uretici
 function randomColor() {
   const colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA07A', '#98D8C8', '#F7DC6F', '#BB8FCE', '#85C1E2'];
   return colors[Math.floor(Math.random() * colors.length)];
 }
 
-// Yem oluşturma
+// Yem olusturma
 function initFoods() {
   foods = [];
   for (let i = 0; i < CONFIG.FOOD_COUNT; i++) {
@@ -55,7 +55,7 @@ function initFoods() {
   }
 }
 
-// Yeni yılan oluştur
+// Yeni yilan olustur
 function createSnake(name) {
   const startX = randomPos(CONFIG.MAP_WIDTH - 200) + 100;
   const startY = randomPos(CONFIG.MAP_HEIGHT - 200) + 100;
@@ -72,21 +72,21 @@ function createSnake(name) {
   };
 }
 
-// Çarpışma kontrolü
+// Carpisma kontrolu
 function checkCollision(snake, allPlayers, playerId) {
   const head = snake.segments[0];
   
-  // Harita sınırları
+  // Harita sinirlari
   if (head.x < 0 || head.x > CONFIG.MAP_WIDTH || head.y < 0 || head.y > CONFIG.MAP_HEIGHT) {
     return true;
   }
   
-  // Diğer yılanlarla çarpışma
+  // Diger yilanlarla carpisma
   for (let id in allPlayers) {
     const other = allPlayers[id];
     if (!other.snake.alive) continue;
     
-    // Başka yılanın gövdesi (kendi başımızla çarpışmayı kontrol etme)
+    // Baska yilanin govdesi (kendi basimizla carpismayo kontrol etme)
     const startIdx = (id === playerId) ? 1 : 0;
     for (let i = startIdx; i < other.snake.segments.length; i++) {
       const seg = other.snake.segments[i];
@@ -100,7 +100,7 @@ function checkCollision(snake, allPlayers, playerId) {
   return false;
 }
 
-// Yem yeme kontrolü
+// Yem yeme kontrolu
 function checkFoodCollision(snake) {
   const head = snake.segments[0];
   let eatenIndices = [];
@@ -115,7 +115,7 @@ function checkFoodCollision(snake) {
   return eatenIndices;
 }
 
-// Yılan hareket
+// Yilan hareket
 function moveSnake(snake) {
   const head = snake.segments[0];
   const newHead = {
@@ -127,7 +127,7 @@ function moveSnake(snake) {
   snake.segments.pop();
 }
 
-// Yılan uzatma
+// Yilan uzatma
 function growSnake(snake, count) {
   for (let i = 0; i < count; i++) {
     const tail = snake.segments[snake.segments.length - 1];
@@ -135,7 +135,7 @@ function growSnake(snake, count) {
   }
 }
 
-// Oyun döngüsü
+// Oyun dongusu
 function gameLoop() {
   for (let id in players) {
     const player = players[id];
@@ -144,13 +144,13 @@ function gameLoop() {
     // Hareket
     moveSnake(player.snake);
     
-    // Yem kontrolü
+    // Yem kontrolu
     const eatenFoods = checkFoodCollision(player.snake);
     if (eatenFoods.length > 0) {
       growSnake(player.snake, eatenFoods.length);
       player.score = player.snake.segments.length;
       
-      // Yenilen yemleri yeniden oluştur
+      // Yenilen yemleri yeniden olustur
       eatenFoods.forEach(idx => {
         foods[idx] = {
           x: randomPos(CONFIG.MAP_WIDTH),
@@ -160,11 +160,11 @@ function gameLoop() {
       });
     }
     
-    // Çarpışma kontrolü
+    // Carpisma kontrolu
     if (checkCollision(player.snake, players, id)) {
       player.snake.alive = false;
       
-      // Yılanı yeme dönüştür
+      // Yilani yeme donustur
       player.snake.segments.forEach(seg => {
         foods.push({
           x: seg.x,
@@ -177,7 +177,7 @@ function gameLoop() {
     }
   }
   
-  // State'i tüm oyunculara gönder
+  // State'i tum oyunculara gonder
   io.emit('gameState', {
     players: Object.keys(players).reduce((acc, id) => {
       if (players[id].snake.alive) {
@@ -194,13 +194,13 @@ function gameLoop() {
   });
 }
 
-// Socket.io bağlantıları
+// Socket.io baglantilari
 io.on('connection', (socket) => {
-  console.log('Oyuncu bağlandı:', socket.id);
+  console.log('Player connected:', socket.id);
   
   socket.on('join', (playerName) => {
     players[socket.id] = {
-      name: playerName || 'Anonim',
+      name: playerName || 'Anonymous',
       snake: createSnake(playerName),
       score: 3
     };
@@ -226,18 +226,17 @@ io.on('connection', (socket) => {
   });
   
   socket.on('disconnect', () => {
-    console.log('Oyuncu ayrıldı:', socket.id);
+    console.log('Player disconnected:', socket.id);
     delete players[socket.id];
   });
 });
 
-// Başlangıç
+// Baslangic
 initFoods();
 setInterval(gameLoop, CONFIG.TICK_RATE);
 
-// Server başlatma
+// Server baslatma
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
-  console.log(`Server çalışıyor: http://localhost:${PORT}`);
+  console.log('Server running on port: ' + PORT);
 });
-```
