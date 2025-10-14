@@ -1,5 +1,5 @@
 /* ============================================
-   STYLE.CSS - Minimal Modern Design
+   STYLE.CSS - Complete Styling
    ============================================ */
 
 * {
@@ -13,10 +13,13 @@ body {
   background: #000;
   color: #fff;
   overflow: hidden;
-  touch-action: none; /* Mobil scroll engelleme */
+  touch-action: none;
 }
 
-/* Giriş Ekranı */
+/* ============================================
+   LOGIN SCREEN
+   ============================================ */
+
 #loginScreen {
   position: fixed;
   top: 0;
@@ -36,6 +39,7 @@ body {
   border-radius: 15px;
   text-align: center;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(10px);
 }
 
 .loginBox h1 {
@@ -43,6 +47,7 @@ body {
   margin-bottom: 30px;
   color: #4ECDC4;
   text-shadow: 0 0 20px rgba(78, 205, 196, 0.5);
+  letter-spacing: 2px;
 }
 
 #nameInput {
@@ -56,6 +61,13 @@ body {
   text-align: center;
   margin-bottom: 20px;
   outline: none;
+  transition: all 0.3s;
+}
+
+#nameInput:focus {
+  border-color: #45B7D1;
+  background: rgba(255, 255, 255, 0.15);
+  box-shadow: 0 0 15px rgba(78, 205, 196, 0.3);
 }
 
 #nameInput::placeholder {
@@ -73,14 +85,24 @@ body {
   border-radius: 8px;
   cursor: pointer;
   transition: all 0.3s;
+  text-transform: uppercase;
+  letter-spacing: 1px;
 }
 
 #joinButton:hover {
   background: #45B7D1;
   transform: scale(1.05);
+  box-shadow: 0 5px 20px rgba(78, 205, 196, 0.4);
 }
 
-/* Oyun Ekranı */
+#joinButton:active {
+  transform: scale(0.98);
+}
+
+/* ============================================
+   GAME SCREEN
+   ============================================ */
+
 #gameScreen {
   position: relative;
   width: 100vw;
@@ -90,18 +112,26 @@ body {
 #gameCanvas {
   display: block;
   background: #000;
+  cursor: crosshair;
 }
 
-/* Skor Tablosu */
+/* ============================================
+   LEADERBOARD
+   ============================================ */
+
 #leaderboard {
   position: fixed;
   top: 20px;
   right: 20px;
-  background: rgba(0, 0, 0, 0.7);
+  background: rgba(0, 0, 0, 0.8);
   padding: 15px;
   border-radius: 10px;
   min-width: 200px;
+  max-width: 250px;
   backdrop-filter: blur(10px);
+  border: 2px solid rgba(78, 205, 196, 0.3);
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
+  z-index: 10;
 }
 
 #leaderboard h3 {
@@ -109,31 +139,45 @@ body {
   margin-bottom: 10px;
   color: #4ECDC4;
   text-align: center;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  border-bottom: 2px solid rgba(78, 205, 196, 0.3);
+  padding-bottom: 8px;
 }
 
 #leaderboardList {
   list-style: none;
   padding: 0;
+  margin: 0;
 }
 
 #leaderboardList li {
-  padding: 5px 0;
+  padding: 8px 5px;
   font-size: 14px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  transition: background 0.2s;
+}
+
+#leaderboardList li:hover {
+  background: rgba(78, 205, 196, 0.1);
 }
 
 #leaderboardList li:last-child {
   border-bottom: none;
 }
 
-/* Mobil Joystick */
+/* ============================================
+   MOBILE JOYSTICK
+   ============================================ */
+
 #joystickContainer {
   position: fixed;
   bottom: 40px;
   left: 40px;
   width: 120px;
   height: 120px;
-  display: none; /* Sadece mobilde görünür */
+  display: none;
+  z-index: 100;
 }
 
 #joystickBase {
@@ -143,6 +187,7 @@ body {
   border-radius: 50%;
   background: rgba(255, 255, 255, 0.1);
   border: 3px solid rgba(255, 255, 255, 0.3);
+  box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.3);
 }
 
 #joystickStick {
@@ -150,16 +195,66 @@ body {
   width: 50px;
   height: 50px;
   border-radius: 50%;
-  background: rgba(78, 205, 196, 0.8);
+  background: rgba(78, 205, 196, 0.9);
   top: 35px;
   left: 35px;
   cursor: pointer;
+  box-shadow: 0 0 15px rgba(78, 205, 196, 0.6);
+  transition: all 0.05s;
 }
 
-/* Responsive - Mobil Algılama */
+/* ============================================
+   MOBILE BOOST BUTTON
+   ============================================ */
+
+#boostButton {
+  position: fixed;
+  bottom: 40px;
+  right: 40px;
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, rgba(255, 193, 7, 0.9), rgba(255, 152, 0, 0.9));
+  border: 3px solid rgba(255, 255, 255, 0.4);
+  display: none;
+  justify-content: center;
+  align-items: center;
+  font-size: 16px;
+  font-weight: bold;
+  color: #000;
+  cursor: pointer;
+  user-select: none;
+  z-index: 100;
+  box-shadow: 0 0 20px rgba(255, 193, 7, 0.6);
+  transition: all 0.1s;
+  text-shadow: 0 1px 2px rgba(255, 255, 255, 0.5);
+}
+
+#boostButton:active,
+#boostButton.active {
+  background: linear-gradient(135deg, rgba(255, 87, 34, 0.95), rgba(244, 67, 54, 0.95));
+  transform: scale(0.9);
+  box-shadow: 0 0 30px rgba(255, 87, 34, 0.8), inset 0 0 15px rgba(0, 0, 0, 0.3);
+  color: #fff;
+}
+
+/* ============================================
+   RESPONSIVE - MOBILE
+   ============================================ */
+
 @media (max-width: 768px) {
   #joystickContainer {
     display: block;
+  }
+  
+  #boostButton {
+    display: flex;
+  }
+  
+  .loginBox {
+    padding: 30px 20px;
+    width: 90%;
+    max-width: 350px;
   }
   
   .loginBox h1 {
@@ -168,13 +263,261 @@ body {
   
   #nameInput,
   #joinButton {
-    width: 250px;
+    width: 100%;
+    max-width: 280px;
   }
   
   #leaderboard {
     top: 10px;
     right: 10px;
-    min-width: 150px;
+    min-width: 140px;
+    max-width: 180px;
+    padding: 10px;
+  }
+  
+  #leaderboard h3 {
+    font-size: 14px;
+    margin-bottom: 8px;
+  }
+  
+  #leaderboardList li {
     font-size: 12px;
+    padding: 5px 3px;
+  }
+  
+  #gameCanvas {
+    cursor: none;
+  }
+  
+  /* Mobilde joystick ve boost'u daha kucuk yap */
+  #joystickContainer {
+    width: 100px;
+    height: 100px;
+    bottom: 30px;
+    left: 30px;
+  }
+  
+  #joystickBase {
+    width: 100px;
+    height: 100px;
+  }
+  
+  #joystickStick {
+    width: 40px;
+    height: 40px;
+    top: 30px;
+    left: 30px;
+  }
+  
+  #boostButton {
+    width: 100px;
+    height: 100px;
+    bottom: 30px;
+    right: 30px;
+    font-size: 14px;
   }
 }
+
+/* ============================================
+   RESPONSIVE - TABLET
+   ============================================ */
+
+@media (min-width: 769px) and (max-width: 1024px) {
+  .loginBox h1 {
+    font-size: 42px;
+  }
+  
+  #nameInput,
+  #joinButton {
+    width: 280px;
+  }
+  
+  #leaderboard {
+    min-width: 180px;
+  }
+}
+
+/* ============================================
+   DESKTOP INFO OVERLAY
+   ============================================ */
+
+@media (min-width: 769px) {
+  body::before {
+    content: '🖱️ Sol Tık veya ⌨️ Space: Hızlan';
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0, 0, 0, 0.8);
+    padding: 12px 25px;
+    border-radius: 8px;
+    font-size: 14px;
+    color: #4ECDC4;
+    pointer-events: none;
+    z-index: 5;
+    border: 2px solid rgba(78, 205, 196, 0.3);
+    backdrop-filter: blur(5px);
+    animation: fadeInOut 3s ease-in-out infinite;
+  }
+}
+
+/* ============================================
+   ANIMATIONS
+   ============================================ */
+
+@keyframes fadeInOut {
+  0%, 100% {
+    opacity: 0.6;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@keyframes pulse {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.05);
+  }
+}
+
+/* Boost button pulse animation */
+#boostButton:not(.active) {
+  animation: pulse 2s ease-in-out infinite;
+}
+
+/* ============================================
+   SCROLLBAR STYLING (for leaderboard)
+   ============================================ */
+
+#leaderboardList::-webkit-scrollbar {
+  width: 6px;
+}
+
+#leaderboardList::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 3px;
+}
+
+#leaderboardList::-webkit-scrollbar-thumb {
+  background: rgba(78, 205, 196, 0.5);
+  border-radius: 3px;
+}
+
+#leaderboardList::-webkit-scrollbar-thumb:hover {
+  background: rgba(78, 205, 196, 0.7);
+}
+
+/* ============================================
+   LOADING ANIMATION (optional)
+   ============================================ */
+
+.loading {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 24px;
+  color: #4ECDC4;
+  animation: pulse 1.5s ease-in-out infinite;
+  z-index: 2000;
+}
+
+/* ============================================
+   UTILITY CLASSES
+   ============================================ */
+
+.hidden {
+  display: none !important;
+}
+
+.fade-in {
+  animation: fadeIn 0.5s ease-in;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* ============================================
+   MOBILE LANDSCAPE OPTIMIZATION
+   ============================================ */
+
+@media (max-width: 768px) and (orientation: landscape) {
+  .loginBox h1 {
+    font-size: 28px;
+    margin-bottom: 15px;
+  }
+  
+  .loginBox {
+    padding: 20px;
+  }
+  
+  #nameInput,
+  #joinButton {
+    padding: 10px;
+    font-size: 16px;
+  }
+  
+  #leaderboard {
+    top: 5px;
+    right: 5px;
+    padding: 8px;
+  }
+  
+  #joystickContainer,
+  #boostButton {
+    width: 80px;
+    height: 80px;
+    bottom: 15px;
+  }
+  
+  #joystickContainer {
+    left: 15px;
+  }
+  
+  #boostButton {
+    right: 15px;
+    font-size: 12px;
+  }
+  
+  #joystickBase {
+    width: 80px;
+    height: 80px;
+  }
+  
+  #joystickStick {
+    width: 32px;
+    height: 32px;
+    top: 24px;
+    left: 24px;
+  }
+}
+
+/* ============================================
+   HIGH DPI SCREENS
+   ============================================ */
+
+@media (-webkit-min-device-pixel-ratio: 2), (min-resolution: 192dpi) {
+  #gameCanvas {
+    image-rendering: -webkit-optimize-contrast;
+    image-rendering: crisp-edges;
+  }
+}
+
+/* ============================================
+   PRINT STYLES (disable)
+   ============================================ */
+
+@media print {
+  body {
+    display: none;
+  }
+   }
