@@ -1,4 +1,4 @@
-```javascript
+javascript
 // ============================================
 // SCRIPT.JS - Client-Side Game Logic
 // ============================================
@@ -256,4 +256,3 @@ function render() {
 function startGame() {
   render();
 }
-'''
