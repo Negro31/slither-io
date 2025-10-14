@@ -1,6 +1,5 @@
-```json
 {
-  "name": "slither-io-clone",
+  "name": "slither-io",
   "version": "1.0.0",
   "description": "Multiplayer snake game with socket.io",
   "main": "server.js",
@@ -15,4 +14,3 @@
     "socket.io": "^4.6.1"
   }
 }
-```
