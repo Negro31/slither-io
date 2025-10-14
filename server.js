@@ -1,8 +1,6 @@
 // ============================================
 // SERVER.JS - Node.js Backend (Express + Socket.io)
 // ============================================
-// Render deployment: Bu dosya otomatik calisacak
-// PORT environment variable Render tarafindan saglanir
 
 const express = require('express');
 const http = require('http');
@@ -13,7 +11,6 @@ const app = express();
 const server = http.createServer(app);
 const io = socketIo(server);
 
-// Static dosyalari sunma
 app.use(express.static(path.join(__dirname, 'public')));
 
 // Oyun sabitleri
@@ -24,25 +21,22 @@ const CONFIG = {
   SNAKE_SPEED: 2.5,
   SEGMENT_SIZE: 10,
   FOOD_SIZE: 6,
-  TICK_RATE: 30 // ms
+  TICK_RATE: 30,
+  SPAWN_MARGIN: 300 // Guvenli spawn alani
 };
 
-// Oyun durumu
-let players = {}; // { socketId: { snake, name, score } }
+let players = {};
 let foods = [];
 
-// Rastgele konum uretici
 function randomPos(max) {
   return Math.floor(Math.random() * max);
 }
 
-// Rastgele renk uretici
 function randomColor() {
   const colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA07A', '#98D8C8', '#F7DC6F', '#BB8FCE', '#85C1E2'];
   return colors[Math.floor(Math.random() * colors.length)];
 }
 
-// Yem olusturma
 function initFoods() {
   foods = [];
   for (let i = 0; i < CONFIG.FOOD_COUNT; i++) {
@@ -54,16 +48,51 @@ function initFoods() {
   }
 }
 
-// Yeni yilan olustur
+// Guvenli spawn konumu bul
+function findSafeSpawnPosition() {
+  let attempts = 0;
+  const maxAttempts = 50;
+  
+  while (attempts < maxAttempts) {
+    const x = randomPos(CONFIG.MAP_WIDTH - CONFIG.SPAWN_MARGIN * 2) + CONFIG.SPAWN_MARGIN;
+    const y = randomPos(CONFIG.MAP_HEIGHT - CONFIG.SPAWN_MARGIN * 2) + CONFIG.SPAWN_MARGIN;
+    
+    // Diger yilanlardan uzakta mi kontrol et
+    let isSafe = true;
+    for (let id in players) {
+      if (!players[id].snake.alive) continue;
+      
+      const otherHead = players[id].snake.segments[0];
+      const distance = Math.hypot(x - otherHead.x, y - otherHead.y);
+      
+      if (distance < 200) { // En az 200 piksel uzakta
+        isSafe = false;
+        break;
+      }
+    }
+    
+    if (isSafe) {
+      return { x, y };
+    }
+    
+    attempts++;
+  }
+  
+  // Eger guvenli yer bulunamazsa haritanin ortasina spawn et
+  return {
+    x: CONFIG.MAP_WIDTH / 2,
+    y: CONFIG.MAP_HEIGHT / 2
+  };
+}
+
 function createSnake(name) {
-  const startX = randomPos(CONFIG.MAP_WIDTH - 200) + 100;
-  const startY = randomPos(CONFIG.MAP_HEIGHT - 200) + 100;
+  const spawnPos = findSafeSpawnPosition();
   
   return {
     segments: [
-      { x: startX, y: startY },
-      { x: startX - CONFIG.SEGMENT_SIZE, y: startY },
-      { x: startX - CONFIG.SEGMENT_SIZE * 2, y: startY }
+      { x: spawnPos.x, y: spawnPos.y },
+      { x: spawnPos.x - CONFIG.SEGMENT_SIZE, y: spawnPos.y },
+      { x: spawnPos.x - CONFIG.SEGMENT_SIZE * 2, y: spawnPos.y }
     ],
     direction: { x: 1, y: 0 },
     color: randomColor(),
@@ -71,12 +100,12 @@ function createSnake(name) {
   };
 }
 
-// Carpisma kontrolu
 function checkCollision(snake, allPlayers, playerId) {
   const head = snake.segments[0];
   
-  // Harita sinirlari
-  if (head.x < 0 || head.x > CONFIG.MAP_WIDTH || head.y < 0 || head.y > CONFIG.MAP_HEIGHT) {
+  // Harita sinirlari - daha toleransli
+  if (head.x < 20 || head.x > CONFIG.MAP_WIDTH - 20 || 
+      head.y < 20 || head.y > CONFIG.MAP_HEIGHT - 20) {
     return true;
   }
   
@@ -85,12 +114,13 @@ function checkCollision(snake, allPlayers, playerId) {
     const other = allPlayers[id];
     if (!other.snake.alive) continue;
     
-    // Baska yilanin govdesi (kendi basimizla carpismayo kontrol etme)
-    const startIdx = (id === playerId) ? 1 : 0;
+    // Kendi govdemizle carpismak icin en az 5 segment gerekli
+    const startIdx = (id === playerId) ? Math.min(5, other.snake.segments.length) : 0;
+    
     for (let i = startIdx; i < other.snake.segments.length; i++) {
       const seg = other.snake.segments[i];
       const dist = Math.hypot(head.x - seg.x, head.y - seg.y);
-      if (dist < CONFIG.SEGMENT_SIZE) {
+      if (dist < CONFIG.SEGMENT_SIZE - 2) { // Daha hassas carpisma
         return true;
       }
     }
@@ -99,14 +129,13 @@ function checkCollision(snake, allPlayers, playerId) {
   return false;
 }
 
-// Yem yeme kontrolu
 function checkFoodCollision(snake) {
   const head = snake.segments[0];
   let eatenIndices = [];
   
   foods.forEach((food, idx) => {
     const dist = Math.hypot(head.x - food.x, head.y - food.y);
-    if (dist < CONFIG.SEGMENT_SIZE) {
+    if (dist < CONFIG.SEGMENT_SIZE + 2) { // Daha kolay yem yeme
       eatenIndices.push(idx);
     }
   });
@@ -114,7 +143,6 @@ function checkFoodCollision(snake) {
   return eatenIndices;
 }
 
-// Yilan hareket
 function moveSnake(snake) {
   const head = snake.segments[0];
   const newHead = {
@@ -126,7 +154,6 @@ function moveSnake(snake) {
   snake.segments.pop();
 }
 
-// Yilan uzatma
 function growSnake(snake, count) {
   for (let i = 0; i < count; i++) {
     const tail = snake.segments[snake.segments.length - 1];
@@ -134,22 +161,18 @@ function growSnake(snake, count) {
   }
 }
 
-// Oyun dongusu
 function gameLoop() {
   for (let id in players) {
     const player = players[id];
     if (!player.snake.alive) continue;
     
-    // Hareket
     moveSnake(player.snake);
     
-    // Yem kontrolu
     const eatenFoods = checkFoodCollision(player.snake);
     if (eatenFoods.length > 0) {
       growSnake(player.snake, eatenFoods.length);
       player.score = player.snake.segments.length;
       
-      // Yenilen yemleri yeniden olustur
       eatenFoods.forEach(idx => {
         foods[idx] = {
           x: randomPos(CONFIG.MAP_WIDTH),
@@ -159,11 +182,9 @@ function gameLoop() {
       });
     }
     
-    // Carpisma kontrolu
     if (checkCollision(player.snake, players, id)) {
       player.snake.alive = false;
       
-      // Yilani yeme donustur
       player.snake.segments.forEach(seg => {
         foods.push({
           x: seg.x,
@@ -176,7 +197,6 @@ function gameLoop() {
     }
   }
   
-  // State'i tum oyunculara gonder
   io.emit('gameState', {
     players: Object.keys(players).reduce((acc, id) => {
       if (players[id].snake.alive) {
@@ -193,7 +213,6 @@ function gameLoop() {
   });
 }
 
-// Socket.io baglantilari
 io.on('connection', (socket) => {
   console.log('Player connected:', socket.id);
   
@@ -204,6 +223,8 @@ io.on('connection', (socket) => {
       score: 3
     };
     
+    console.log('Player spawned:', playerName, 'at', players[socket.id].snake.segments[0]);
+    
     socket.emit('init', {
       playerId: socket.id,
       mapWidth: CONFIG.MAP_WIDTH,
@@ -213,7 +234,6 @@ io.on('connection', (socket) => {
   
   socket.on('changeDirection', (direction) => {
     if (players[socket.id] && players[socket.id].snake.alive) {
-      // Normalize direction
       const len = Math.hypot(direction.x, direction.y);
       if (len > 0) {
         players[socket.id].snake.direction = {
@@ -230,11 +250,9 @@ io.on('connection', (socket) => {
   });
 });
 
-// Baslangic
 initFoods();
 setInterval(gameLoop, CONFIG.TICK_RATE);
 
-// Server baslatma
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
   console.log('Server running on port: ' + PORT);
