@@ -1,5 +1,5 @@
 // ============================================
-// SERVER.JS - Final Optimized Backend
+// SERVER.JS - Boost Bug Fixed
 // ============================================
 
 const express = require('express');
@@ -21,7 +21,6 @@ const io = socketIo(server, {
 
 app.use(express.static(path.join(__dirname, 'public')));
 
-// CORS ayarlari - herkese acik
 app.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*');
   res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
@@ -29,26 +28,24 @@ app.use((req, res, next) => {
   next();
 });
 
-// Health check endpoint
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', players: Object.keys(players).length });
 });
 
-// Oyun sabitleri
 const CONFIG = {
   MAP_WIDTH: 3000,
   MAP_HEIGHT: 3000,
-  MAP_BORDER: 100, // Guvenli sinir
+  MAP_BORDER: 100,
   FOOD_COUNT: 300,
   SNAKE_SPEED: 3,
   BOOST_SPEED: 6,
-  BOOST_DRAIN: 0.3, // Her tick'te kuculmek
+  BOOST_DRAIN_RATE: 0.5, // Her tick'te kac segment kuculsun
   SEGMENT_SIZE: 10,
   FOOD_SIZE: 6,
   TICK_RATE: 50,
   SPAWN_MARGIN: 400,
   COLLISION_THRESHOLD: 8,
-  MIN_SNAKE_LENGTH: 10 // Minimum uzunluk
+  MIN_SNAKE_LENGTH: 10
 };
 
 let players = {};
@@ -63,7 +60,6 @@ function randomColor() {
   return colors[Math.floor(Math.random() * colors.length)];
 }
 
-// Yem olusturma - SADECE harita icinde
 function initFoods() {
   foods = [];
   for (let i = 0; i < CONFIG.FOOD_COUNT; i++) {
@@ -128,33 +124,28 @@ function createSnake(name) {
     color: randomColor(),
     alive: true,
     spawnTime: Date.now(),
-    boosting: false
+    boosting: false,
+    boostDrainAccumulator: 0 // Kesirli kuculmeler icin
   };
 }
 
 function checkCollision(snake, allPlayers, playerId) {
   const head = snake.segments[0];
   
-  // Spawn korumasi
   if (Date.now() - snake.spawnTime < 2000) {
     return false;
   }
   
-  // Harita sinirlari
   if (head.x <= CONFIG.MAP_BORDER || head.x >= CONFIG.MAP_WIDTH - CONFIG.MAP_BORDER || 
       head.y <= CONFIG.MAP_BORDER || head.y >= CONFIG.MAP_HEIGHT - CONFIG.MAP_BORDER) {
     return true;
   }
   
-  // SADECE CANLI yilanlarla carpisma
   for (let id in allPlayers) {
     const other = allPlayers[id];
     if (!other.snake.alive) continue;
-    
-    // KENDI YILANIMIZLA CARPISMAYI TAMAMEN DEVRE DISI BIRAK
     if (id === playerId) continue;
     
-    // Diger yilanlarla carpisma
     for (let i = 0; i < other.snake.segments.length; i++) {
       const seg = other.snake.segments[i];
       const dist = Math.hypot(head.x - seg.x, head.y - seg.y);
@@ -181,6 +172,7 @@ function checkFoodCollision(snake) {
   return eatenIndices;
 }
 
+// DUZELTILMIS HAREKET FONKSIYONU
 function moveSnake(snake, boosting) {
   const head = snake.segments[0];
   const speed = boosting ? CONFIG.BOOST_SPEED : CONFIG.SNAKE_SPEED;
@@ -192,24 +184,27 @@ function moveSnake(snake, boosting) {
   
   snake.segments.unshift(newHead);
   
-  // Hizlanma sirasinda kucul
+  // HIZLANMA DURUMUNDA KUCUL
   if (boosting && snake.segments.length > CONFIG.MIN_SNAKE_LENGTH) {
-    // Her tick'te 0.3 segment kucul
-    const shrinkAmount = CONFIG.BOOST_DRAIN;
-    for (let i = 0; i < Math.floor(shrinkAmount); i++) {
-      snake.segments.pop();
+    // Accumulator ile kesirli kuculmeler
+    snake.boostDrainAccumulator += CONFIG.BOOST_DRAIN_RATE;
+    
+    // Tam sayi kadar segment sil
+    const segmentsToRemove = Math.floor(snake.boostDrainAccumulator);
+    
+    for (let i = 0; i < segmentsToRemove; i++) {
+      if (snake.segments.length > CONFIG.MIN_SNAKE_LENGTH) {
+        snake.segments.pop();
+      }
     }
     
     // Kesirli kismi sakla
-    if (!snake.shrinkAccumulator) snake.shrinkAccumulator = 0;
-    snake.shrinkAccumulator += shrinkAmount % 1;
+    snake.boostDrainAccumulator -= segmentsToRemove;
     
-    if (snake.shrinkAccumulator >= 1) {
-      snake.segments.pop();
-      snake.shrinkAccumulator -= 1;
-    }
   } else {
+    // NORMAL HAREKET - sadece 1 segment sil
     snake.segments.pop();
+    snake.boostDrainAccumulator = 0; // Reset accumulator
   }
 }
 
@@ -225,6 +220,7 @@ function gameLoop() {
     const player = players[id];
     if (!player.snake.alive) continue;
     
+    // Hareket - boosting durumunu gonder
     moveSnake(player.snake, player.boosting);
     
     const eatenFoods = checkFoodCollision(player.snake);
@@ -232,7 +228,6 @@ function gameLoop() {
       growSnake(player.snake, eatenFoods.length);
       player.score = player.snake.segments.length;
       
-      // Yeni yemler SADECE harita icinde
       eatenFoods.forEach(idx => {
         foods[idx] = {
           id: 'food_' + Date.now() + '_' + idx,
@@ -246,7 +241,6 @@ function gameLoop() {
     if (checkCollision(player.snake, players, id)) {
       player.snake.alive = false;
       
-      // Yilani yeme donustur - harita icinde
       const deathFoods = [];
       player.snake.segments.forEach((seg, idx) => {
         if (idx % 2 === 0 && 
@@ -271,7 +265,6 @@ function gameLoop() {
     }
   }
   
-  // Sadece canli oyunculari gonder
   const activePlayers = {};
   for (let id in players) {
     if (players[id].snake.alive) {
@@ -322,12 +315,12 @@ io.on('connection', (socket) => {
     }
   });
   
-  // Hizlanma kontrolu
   socket.on('boost', (isBoosting) => {
     if (players[socket.id] && players[socket.id].snake.alive) {
-      // Minimum uzunluktan fazlaysa hizlanabilir
       if (players[socket.id].snake.segments.length > CONFIG.MIN_SNAKE_LENGTH) {
         players[socket.id].boosting = isBoosting;
+      } else {
+        players[socket.id].boosting = false;
       }
     }
   });
