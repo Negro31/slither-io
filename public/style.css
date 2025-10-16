@@ -1,5 +1,5 @@
 /* ============================================
-   STYLE.CSS - Complete Styling
+   STYLE.CSS - Complete with Admin Panel
    ============================================ */
 
 * {
@@ -167,6 +167,135 @@ body {
 }
 
 /* ============================================
+   ADMIN PANEL
+   ============================================ */
+
+#adminPanel {
+  position: fixed;
+  top: 20px;
+  left: 20px;
+  background: rgba(0, 0, 0, 0.85);
+  padding: 15px;
+  border-radius: 10px;
+  min-width: 220px;
+  backdrop-filter: blur(10px);
+  border: 2px solid rgba(255, 193, 7, 0.3);
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
+  z-index: 10;
+}
+
+#adminInput {
+  width: 100%;
+  padding: 8px;
+  margin-bottom: 8px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 193, 7, 0.3);
+  border-radius: 5px;
+  color: #fff;
+  font-size: 12px;
+  outline: none;
+}
+
+#adminInput::placeholder {
+  color: rgba(255, 255, 255, 0.4);
+}
+
+#adminLoginBtn {
+  width: 100%;
+  padding: 8px;
+  background: #FFC107;
+  color: #000;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  font-weight: bold;
+  font-size: 12px;
+  margin-bottom: 10px;
+  transition: all 0.2s;
+}
+
+#adminLoginBtn:hover {
+  background: #FFD54F;
+}
+
+#adminLoginBtn:disabled {
+  background: #4CAF50;
+  cursor: not-allowed;
+}
+
+#adminControls h4 {
+  color: #FFC107;
+  font-size: 14px;
+  margin-bottom: 10px;
+  text-align: center;
+  border-bottom: 1px solid rgba(255, 193, 7, 0.3);
+  padding-bottom: 5px;
+}
+
+#adminControls button {
+  width: 100%;
+  padding: 8px;
+  margin-bottom: 5px;
+  background: rgba(78, 205, 196, 0.8);
+  color: #000;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  font-weight: bold;
+  font-size: 12px;
+  transition: all 0.2s;
+}
+
+#adminControls button:hover {
+  background: rgba(78, 205, 196, 1);
+  transform: scale(1.02);
+}
+
+#adminControls button:active {
+  transform: scale(0.98);
+}
+
+#removeBotBtn {
+  background: rgba(244, 67, 54, 0.8) !important;
+}
+
+#removeBotBtn:hover {
+  background: rgba(244, 67, 54, 1) !important;
+}
+
+.admin-section {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(255, 193, 7, 0.2);
+}
+
+#targetPlayerName,
+#foodAmount {
+  width: 100%;
+  padding: 6px;
+  margin-bottom: 5px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 193, 7, 0.3);
+  border-radius: 4px;
+  color: #fff;
+  font-size: 11px;
+  outline: none;
+}
+
+#targetPlayerName::placeholder,
+#foodAmount::placeholder {
+  color: rgba(255, 255, 255, 0.4);
+}
+
+#modifyPlayerBtn {
+  background: rgba(156, 39, 176, 0.8) !important;
+}
+
+#modifyPlayerBtn:hover {
+  background: rgba(156, 39, 176, 1) !important;
+}
+
+/* ============================================
    MOBILE JOYSTICK
    ============================================ */
 
@@ -285,11 +414,17 @@ body {
     padding: 5px 3px;
   }
   
+  #adminPanel {
+    top: 10px;
+    left: 10px;
+    min-width: 180px;
+    padding: 10px;
+  }
+  
   #gameCanvas {
     cursor: none;
   }
   
-  /* Mobilde joystick ve boost'u daha kucuk yap */
   #joystickContainer {
     width: 100px;
     height: 100px;
@@ -383,13 +518,12 @@ body {
   }
 }
 
-/* Boost button pulse animation */
 #boostButton:not(.active) {
   animation: pulse 2s ease-in-out infinite;
 }
 
 /* ============================================
-   SCROLLBAR STYLING (for leaderboard)
+   SCROLLBAR STYLING
    ============================================ */
 
 #leaderboardList::-webkit-scrollbar {
@@ -408,21 +542,6 @@ body {
 
 #leaderboardList::-webkit-scrollbar-thumb:hover {
   background: rgba(78, 205, 196, 0.7);
-}
-
-/* ============================================
-   LOADING ANIMATION (optional)
-   ============================================ */
-
-.loading {
-  position: fixed;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  font-size: 24px;
-  color: #4ECDC4;
-  animation: pulse 1.5s ease-in-out infinite;
-  z-index: 2000;
 }
 
 /* ============================================
@@ -447,7 +566,7 @@ body {
 }
 
 /* ============================================
-   MOBILE LANDSCAPE OPTIMIZATION
+   MOBILE LANDSCAPE
    ============================================ */
 
 @media (max-width: 768px) and (orientation: landscape) {
@@ -466,9 +585,9 @@ body {
     font-size: 16px;
   }
   
-  #leaderboard {
+  #leaderboard,
+  #adminPanel {
     top: 5px;
-    right: 5px;
     padding: 8px;
   }
   
@@ -498,26 +617,5 @@ body {
     height: 32px;
     top: 24px;
     left: 24px;
-  }
-}
-
-/* ============================================
-   HIGH DPI SCREENS
-   ============================================ */
-
-@media (-webkit-min-device-pixel-ratio: 2), (min-resolution: 192dpi) {
-  #gameCanvas {
-    image-rendering: -webkit-optimize-contrast;
-    image-rendering: crisp-edges;
-  }
-}
-
-/* ============================================
-   PRINT STYLES (disable)
-   ============================================ */
-
-@media print {
-  body {
-    display: none;
   }
    }
