@@ -1,5 +1,5 @@
 // ============================================
-// SCRIPT.JS - Optimized Client
+// SCRIPT.JS - With Admin Panel
 // ============================================
 
 const loginScreen = document.getElementById('loginScreen');
@@ -12,6 +12,10 @@ const leaderboardList = document.getElementById('leaderboardList');
 const joystickContainer = document.getElementById('joystickContainer');
 const joystickStick = document.getElementById('joystickStick');
 const boostButton = document.getElementById('boostButton');
+const adminPanel = document.getElementById('adminPanel');
+const adminInput = document.getElementById('adminInput');
+const adminLoginBtn = document.getElementById('adminLoginBtn');
+const adminControls = document.getElementById('adminControls');
 
 let socket;
 let myPlayerId = null;
@@ -22,7 +26,7 @@ let mapBorder = 100;
 let camera = { x: 0, y: 0 };
 let isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 let isBoosting = false;
-let lastFrameTime = Date.now();
+let isAdmin = false;
 
 // FPS
 let fps = 0;
@@ -40,9 +44,10 @@ joinButton.addEventListener('click', () => {
   const name = nameInput.value.trim() || 'Anonymous';
   socket = io({
     reconnection: true,
-    reconnectionDelay: 1000,
+    reconnectionDelay: 500,
     reconnectionAttempts: 10,
-    transports: ['websocket', 'polling']
+    transports: ['websocket', 'polling'],
+    timeout: 10000
   });
   
   socket.on('connect', () => {
@@ -70,11 +75,60 @@ joinButton.addEventListener('click', () => {
       location.reload();
     }, 100);
   });
+  
+  socket.on('adminAccess', (granted) => {
+    if (granted) {
+      isAdmin = true;
+      adminControls.style.display = 'block';
+      adminLoginBtn.textContent = 'Admin Active';
+      adminLoginBtn.disabled = true;
+    } else {
+      alert('Wrong password!');
+    }
+  });
+  
+  socket.on('botCreated', (data) => {
+    console.log('Bot created:', data.name);
+  });
+  
+  socket.on('botRemoved', (id) => {
+    console.log('Bot removed:', id);
+  });
 });
 
-// Input handling
-let mouseDirection = { x: 1, y: 0 };
+// Admin Panel
+adminLoginBtn.addEventListener('click', () => {
+  const password = adminInput.value.trim();
+  if (password && socket) {
+    socket.emit('adminLogin', password);
+  }
+});
+
+document.getElementById('addBotBtn').addEventListener('click', () => {
+  if (isAdmin && socket) {
+    socket.emit('addBot');
+  }
+});
+
+document.getElementById('removeBotBtn').addEventListener('click', () => {
+  if (isAdmin && socket) {
+    socket.emit('removeBot');
+  }
+});
+
+document.getElementById('modifyPlayerBtn').addEventListener('click', () => {
+  if (isAdmin && socket) {
+    const playerName = document.getElementById('targetPlayerName').value.trim();
+    const amount = document.getElementById('foodAmount').value.trim();
+    if (playerName && amount) {
+      socket.emit('modifyPlayer', { playerName, amount });
+    }
+  }
+});
+
+// Input handling - IMMEDIATE RESPONSE
 let lastDirectionSend = 0;
+let pendingDirection = null;
 
 canvas.addEventListener('mousemove', (e) => {
   if (!myPlayerId || isMobile) return;
@@ -91,42 +145,42 @@ canvas.addEventListener('mousemove', (e) => {
   const len = Math.hypot(dx, dy);
   
   if (len > 10) {
-    const newDir = { x: dx / len, y: dy / len };
+    pendingDirection = { x: dx / len, y: dy / len };
     
-    // Throttle direction updates (every 50ms)
     const now = Date.now();
-    if (now - lastDirectionSend > 50) {
-      socket.emit('changeDirection', newDir);
-      lastDirectionSend = now;
+    if (now - lastDirectionSend > 30) { // 30ms throttle
+      if (pendingDirection && socket) {
+        socket.emit('changeDirection', pendingDirection);
+        lastDirectionSend = now;
+      }
     }
-    mouseDirection = newDir;
   }
 });
 
 canvas.addEventListener('mousedown', (e) => {
   if (!myPlayerId || isMobile || e.button !== 0) return;
   isBoosting = true;
-  socket.emit('boost', true);
+  if (socket) socket.emit('boost', true);
 });
 
 canvas.addEventListener('mouseup', (e) => {
   if (!myPlayerId || isMobile || e.button !== 0) return;
   isBoosting = false;
-  socket.emit('boost', false);
+  if (socket) socket.emit('boost', false);
 });
 
 document.addEventListener('keydown', (e) => {
   if (!myPlayerId || isMobile || e.code !== 'Space' || isBoosting) return;
   e.preventDefault();
   isBoosting = true;
-  socket.emit('boost', true);
+  if (socket) socket.emit('boost', true);
 });
 
 document.addEventListener('keyup', (e) => {
   if (!myPlayerId || isMobile || e.code !== 'Space') return;
   e.preventDefault();
   isBoosting = false;
-  socket.emit('boost', false);
+  if (socket) socket.emit('boost', false);
 });
 
 boostButton.addEventListener('touchstart', (e) => {
@@ -134,7 +188,7 @@ boostButton.addEventListener('touchstart', (e) => {
   e.preventDefault();
   isBoosting = true;
   boostButton.classList.add('active');
-  socket.emit('boost', true);
+  if (socket) socket.emit('boost', true);
 });
 
 boostButton.addEventListener('touchend', (e) => {
@@ -142,10 +196,10 @@ boostButton.addEventListener('touchend', (e) => {
   e.preventDefault();
   isBoosting = false;
   boostButton.classList.remove('active');
-  socket.emit('boost', false);
+  if (socket) socket.emit('boost', false);
 });
 
-// Joystick
+// Joystick - IMMEDIATE RESPONSE
 let joystickActive = false;
 let joystickCenter = { x: 0, y: 0 };
 
@@ -178,11 +232,11 @@ function handleJoystickMove(e) {
   
   if (distance > 10) {
     const len = Math.hypot(dx, dy);
-    const newDir = { x: dx / len, y: dy / len };
+    pendingDirection = { x: dx / len, y: dy / len };
     
     const now = Date.now();
-    if (now - lastDirectionSend > 50) {
-      socket.emit('changeDirection', newDir);
+    if (now - lastDirectionSend > 30 && socket) {
+      socket.emit('changeDirection', pendingDirection);
       lastDirectionSend = now;
     }
   }
@@ -205,8 +259,8 @@ function updateCamera() {
   if (!player) return;
   
   const head = player.s[0];
-  camera.x += (head.x - camera.x) * 0.1;
-  camera.y += (head.y - camera.y) * 0.1;
+  camera.x += (head.x - camera.x) * 0.15; // Daha hizli kamera
+  camera.y += (head.y - camera.y) * 0.15;
 }
 
 function updateLeaderboard() {
@@ -382,7 +436,6 @@ function render() {
   
   drawFPS();
   
-  lastFrameTime = now;
   requestAnimationFrame(render);
 }
 
