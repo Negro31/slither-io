@@ -1,5 +1,5 @@
 // ============================================
-// SCRIPT.JS - Final Optimized Client
+// SCRIPT.JS - Optimized Client
 // ============================================
 
 const loginScreen = document.getElementById('loginScreen');
@@ -15,15 +15,14 @@ const boostButton = document.getElementById('boostButton');
 
 let socket;
 let myPlayerId = null;
-let gameState = { players: {}, foods: [] };
-let interpolatedPlayers = {};
+let gameState = { p: {}, f: [] };
 let mapWidth = 3000;
 let mapHeight = 3000;
 let mapBorder = 100;
 let camera = { x: 0, y: 0 };
-let mouseDirection = { x: 1, y: 0 };
 let isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 let isBoosting = false;
+let lastFrameTime = Date.now();
 
 // FPS
 let fps = 0;
@@ -47,7 +46,6 @@ joinButton.addEventListener('click', () => {
   });
   
   socket.on('connect', () => {
-    console.log('Connected to server');
     socket.emit('join', name);
   });
   
@@ -63,13 +61,6 @@ joinButton.addEventListener('click', () => {
   
   socket.on('gameState', (state) => {
     gameState = state;
-    
-    for (let id in state.players) {
-      if (!interpolatedPlayers[id]) {
-        interpolatedPlayers[id] = JSON.parse(JSON.stringify(state.players[id]));
-      }
-    }
-    
     updateLeaderboard();
   });
   
@@ -79,20 +70,19 @@ joinButton.addEventListener('click', () => {
       location.reload();
     }, 100);
   });
-  
-  socket.on('disconnect', () => {
-    console.log('Disconnected from server');
-  });
 });
 
-// Fare hareketi
+// Input handling
+let mouseDirection = { x: 1, y: 0 };
+let lastDirectionSend = 0;
+
 canvas.addEventListener('mousemove', (e) => {
   if (!myPlayerId || isMobile) return;
   
-  const player = gameState.players[myPlayerId];
+  const player = gameState.p[myPlayerId];
   if (!player) return;
   
-  const head = player.segments[0];
+  const head = player.s[0];
   const mouseX = e.clientX - canvas.width / 2 + camera.x;
   const mouseY = e.clientY - canvas.height / 2 + camera.y;
   
@@ -101,48 +91,44 @@ canvas.addEventListener('mousemove', (e) => {
   const len = Math.hypot(dx, dy);
   
   if (len > 10) {
-    mouseDirection = { x: dx / len, y: dy / len };
-    socket.emit('changeDirection', mouseDirection);
+    const newDir = { x: dx / len, y: dy / len };
+    
+    // Throttle direction updates (every 50ms)
+    const now = Date.now();
+    if (now - lastDirectionSend > 50) {
+      socket.emit('changeDirection', newDir);
+      lastDirectionSend = now;
+    }
+    mouseDirection = newDir;
   }
 });
 
-// Mouse boost (sol tik veya space)
 canvas.addEventListener('mousedown', (e) => {
-  if (!myPlayerId || isMobile) return;
-  if (e.button === 0) { // Sol tik
-    isBoosting = true;
-    socket.emit('boost', true);
-  }
+  if (!myPlayerId || isMobile || e.button !== 0) return;
+  isBoosting = true;
+  socket.emit('boost', true);
 });
 
 canvas.addEventListener('mouseup', (e) => {
-  if (!myPlayerId || isMobile) return;
-  if (e.button === 0) {
-    isBoosting = false;
-    socket.emit('boost', false);
-  }
+  if (!myPlayerId || isMobile || e.button !== 0) return;
+  isBoosting = false;
+  socket.emit('boost', false);
 });
 
-// Space tusu ile hizlanma
 document.addEventListener('keydown', (e) => {
-  if (!myPlayerId || isMobile) return;
-  if (e.code === 'Space' && !isBoosting) {
-    e.preventDefault();
-    isBoosting = true;
-    socket.emit('boost', true);
-  }
+  if (!myPlayerId || isMobile || e.code !== 'Space' || isBoosting) return;
+  e.preventDefault();
+  isBoosting = true;
+  socket.emit('boost', true);
 });
 
 document.addEventListener('keyup', (e) => {
-  if (!myPlayerId || isMobile) return;
-  if (e.code === 'Space') {
-    e.preventDefault();
-    isBoosting = false;
-    socket.emit('boost', false);
-  }
+  if (!myPlayerId || isMobile || e.code !== 'Space') return;
+  e.preventDefault();
+  isBoosting = false;
+  socket.emit('boost', false);
 });
 
-// Mobil boost button
 boostButton.addEventListener('touchstart', (e) => {
   if (!isMobile) return;
   e.preventDefault();
@@ -192,8 +178,13 @@ function handleJoystickMove(e) {
   
   if (distance > 10) {
     const len = Math.hypot(dx, dy);
-    mouseDirection = { x: dx / len, y: dy / len };
-    socket.emit('changeDirection', mouseDirection);
+    const newDir = { x: dx / len, y: dy / len };
+    
+    const now = Date.now();
+    if (now - lastDirectionSend > 50) {
+      socket.emit('changeDirection', newDir);
+      lastDirectionSend = now;
+    }
   }
 }
 
@@ -210,24 +201,23 @@ joystickContainer.addEventListener('touchmove', handleJoystickMove, { passive: f
 joystickContainer.addEventListener('touchend', handleJoystickEnd, { passive: false });
 
 function updateCamera() {
-  const player = gameState.players[myPlayerId];
+  const player = gameState.p[myPlayerId];
   if (!player) return;
   
-  const head = player.segments[0];
-  const lerpFactor = 0.1;
-  camera.x += (head.x - camera.x) * lerpFactor;
-  camera.y += (head.y - camera.y) * lerpFactor;
+  const head = player.s[0];
+  camera.x += (head.x - camera.x) * 0.1;
+  camera.y += (head.y - camera.y) * 0.1;
 }
 
 function updateLeaderboard() {
-  const sorted = Object.entries(gameState.players)
-    .sort((a, b) => b[1].score - a[1].score)
+  const sorted = Object.entries(gameState.p)
+    .sort((a, b) => b[1].sc - a[1].sc)
     .slice(0, 10);
   
   leaderboardList.innerHTML = sorted
     .map(([id, player]) => {
       const highlight = id === myPlayerId ? 'style="color: #4ECDC4; font-weight: bold;"' : '';
-      return '<li ' + highlight + '>' + player.name + ': ' + player.score + '</li>';
+      return '<li ' + highlight + '>' + player.n + ': ' + player.sc + '</li>';
     })
     .join('');
 }
@@ -238,16 +228,16 @@ function drawMapBorder() {
   
   const x1 = mapBorder - camera.x + canvas.width / 2;
   const y1 = mapBorder - camera.y + canvas.height / 2;
-  const x2 = mapWidth - mapBorder - camera.x + canvas.width / 2;
-  const y2 = mapHeight - mapBorder - camera.y + canvas.height / 2;
+  const w = mapWidth - mapBorder * 2;
+  const h = mapHeight - mapBorder * 2;
   
-  ctx.strokeRect(x1, y1, x2 - x1, y2 - y1);
+  ctx.strokeRect(x1, y1, w, h);
   
-  ctx.fillStyle = 'rgba(255, 0, 0, 0.15)';
-  ctx.fillRect(x1, y1 - mapBorder, x2 - x1, mapBorder);
-  ctx.fillRect(x1, y2, x2 - x1, mapBorder);
-  ctx.fillRect(x1 - mapBorder, y1, mapBorder, y2 - y1);
-  ctx.fillRect(x2, y1, mapBorder, y2 - y1);
+  ctx.fillStyle = 'rgba(255, 0, 0, 0.1)';
+  ctx.fillRect(x1, y1 - mapBorder, w, mapBorder);
+  ctx.fillRect(x1, y1 + h, w, mapBorder);
+  ctx.fillRect(x1 - mapBorder, y1, mapBorder, h);
+  ctx.fillRect(x1 + w, y1, mapBorder, h);
 }
 
 function drawGrid() {
@@ -257,15 +247,17 @@ function drawGrid() {
   const gridSize = 50;
   const startX = Math.floor((camera.x - canvas.width / 2) / gridSize) * gridSize;
   const startY = Math.floor((camera.y - canvas.height / 2) / gridSize) * gridSize;
+  const endX = camera.x + canvas.width / 2;
+  const endY = camera.y + canvas.height / 2;
   
-  for (let x = startX; x < camera.x + canvas.width / 2; x += gridSize) {
+  for (let x = startX; x < endX; x += gridSize) {
     ctx.beginPath();
     ctx.moveTo(x - camera.x + canvas.width / 2, 0);
     ctx.lineTo(x - camera.x + canvas.width / 2, canvas.height);
     ctx.stroke();
   }
   
-  for (let y = startY; y < camera.y + canvas.height / 2; y += gridSize) {
+  for (let y = startY; y < endY; y += gridSize) {
     ctx.beginPath();
     ctx.moveTo(0, y - camera.y + canvas.height / 2);
     ctx.lineTo(canvas.width, y - camera.y + canvas.height / 2);
@@ -274,100 +266,96 @@ function drawGrid() {
 }
 
 function drawFoods() {
-  gameState.foods.forEach(food => {
-    const screenX = food.x - camera.x + canvas.width / 2;
-    const screenY = food.y - camera.y + canvas.height / 2;
+  const halfW = canvas.width / 2;
+  const halfH = canvas.height / 2;
+  
+  for (let i = 0; i < gameState.f.length; i++) {
+    const food = gameState.f[i];
+    const screenX = food.x - camera.x + halfW;
+    const screenY = food.y - camera.y + halfH;
     
-    if (screenX < -20 || screenX > canvas.width + 20 || 
-        screenY < -20 || screenY > canvas.height + 20) {
-      return;
-    }
+    if (screenX < -10 || screenX > canvas.width + 10 || 
+        screenY < -10 || screenY > canvas.height + 10) continue;
     
-    ctx.fillStyle = food.color;
+    ctx.fillStyle = food.c;
     ctx.beginPath();
-    ctx.arc(screenX, screenY, 6, 0, Math.PI * 2);
+    ctx.arc(screenX, screenY, 6, 0, 6.28);
     ctx.fill();
-  });
+  }
 }
 
 function drawSnake(player, isMe) {
-  if (!isMe && interpolatedPlayers[player.name]) {
-    const interp = interpolatedPlayers[player.name];
-    player.segments.forEach((seg, idx) => {
-      if (interp.segments[idx]) {
-        interp.segments[idx].x += (seg.x - interp.segments[idx].x) * 0.3;
-        interp.segments[idx].y += (seg.y - interp.segments[idx].y) * 0.3;
-      }
-    });
-    player = interp;
-  }
+  const halfW = canvas.width / 2;
+  const halfH = canvas.height / 2;
   
-  player.segments.forEach((seg, idx) => {
-    const screenX = seg.x - camera.x + canvas.width / 2;
-    const screenY = seg.y - camera.y + canvas.height / 2;
+  for (let i = 0; i < player.s.length; i++) {
+    const seg = player.s[i];
+    const screenX = seg.x - camera.x + halfW;
+    const screenY = seg.y - camera.y + halfH;
     
-    // Hizlanma efekti
-    const segmentSize = (player.boosting && isMe) ? 9 : 10;
+    const size = player.b && isMe ? 9 : 10;
     
-    ctx.fillStyle = player.color;
+    ctx.fillStyle = player.c;
     ctx.strokeStyle = isMe ? '#fff' : 'rgba(0, 0, 0, 0.3)';
     ctx.lineWidth = isMe ? 2 : 1;
     
-    // Hizlanma parcaciklari
-    if (player.boosting && isMe && idx % 3 === 0) {
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+    if (player.b && isMe && i % 2 === 0) {
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
       ctx.beginPath();
-      ctx.arc(screenX, screenY, 12, 0, Math.PI * 2);
+      ctx.arc(screenX, screenY, 12, 0, 6.28);
       ctx.fill();
     }
     
-    ctx.fillStyle = player.color;
+    ctx.fillStyle = player.c;
     ctx.beginPath();
-    ctx.arc(screenX, screenY, segmentSize, 0, Math.PI * 2);
+    ctx.arc(screenX, screenY, size, 0, 6.28);
     ctx.fill();
     ctx.stroke();
     
-    if (idx === 0) {
+    if (i === 0) {
       ctx.fillStyle = '#fff';
       ctx.beginPath();
-      ctx.arc(screenX - 3, screenY - 3, 2, 0, Math.PI * 2);
-      ctx.arc(screenX + 3, screenY - 3, 2, 0, Math.PI * 2);
+      ctx.arc(screenX - 3, screenY - 3, 2, 0, 6.28);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(screenX + 3, screenY - 3, 2, 0, 6.28);
       ctx.fill();
     }
-  });
+  }
   
-  const head = player.segments[0];
-  const screenX = head.x - camera.x + canvas.width / 2;
-  const screenY = head.y - camera.y + canvas.height / 2 - 20;
+  const head = player.s[0];
+  const screenX = head.x - camera.x + halfW;
+  const screenY = head.y - camera.y + halfH - 20;
   
   ctx.fillStyle = '#fff';
   ctx.font = 'bold 14px Arial';
   ctx.textAlign = 'center';
   ctx.strokeStyle = '#000';
   ctx.lineWidth = 3;
-  ctx.strokeText(player.name, screenX, screenY);
-  ctx.fillText(player.name, screenX, screenY);
+  ctx.strokeText(player.n, screenX, screenY);
+  ctx.fillText(player.n, screenX, screenY);
 }
 
 function drawFPS() {
   ctx.fillStyle = '#0F0';
-  ctx.font = 'bold 16px monospace';
+  ctx.font = 'bold 14px monospace';
   ctx.textAlign = 'left';
-  ctx.fillText('FPS: ' + fps, 10, 30);
+  ctx.fillText('FPS: ' + fps, 10, 25);
   
-  const player = gameState.players[myPlayerId];
+  const player = gameState.p[myPlayerId];
   if (player) {
-    ctx.fillText('Length: ' + player.score, 10, 50);
-    if (player.boosting) {
+    ctx.fillText('Length: ' + player.sc, 10, 45);
+    if (player.b) {
       ctx.fillStyle = '#FF0';
-      ctx.fillText('BOOSTING!', 10, 70);
+      ctx.fillText('BOOST!', 10, 65);
     }
   }
 }
 
 function render() {
-  frameCount++;
   const now = Date.now();
+  frameCount++;
+  
   if (now - lastFpsUpdate >= 1000) {
     fps = frameCount;
     frameCount = 0;
@@ -382,21 +370,22 @@ function render() {
   drawMapBorder();
   drawFoods();
   
-  for (let id in gameState.players) {
+  for (let id in gameState.p) {
     if (id !== myPlayerId) {
-      drawSnake(gameState.players[id], false);
+      drawSnake(gameState.p[id], false);
     }
   }
   
-  if (gameState.players[myPlayerId]) {
-    drawSnake(gameState.players[myPlayerId], true);
+  if (gameState.p[myPlayerId]) {
+    drawSnake(gameState.p[myPlayerId], true);
   }
   
   drawFPS();
   
+  lastFrameTime = now;
   requestAnimationFrame(render);
 }
 
 function startGame() {
   render();
-  }
+}
