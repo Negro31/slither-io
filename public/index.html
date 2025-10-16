@@ -8,6 +8,7 @@
 </head>
 <body>
   
+  <!-- Giris Ekrani -->
   <div id="loginScreen">
     <div class="loginBox">
       <h1>SLITHER.IO</h1>
@@ -16,12 +17,31 @@
     </div>
   </div>
 
+  <!-- Oyun Ekrani -->
   <div id="gameScreen" style="display: none;">
     <canvas id="gameCanvas"></canvas>
     
+    <!-- Skor Tablosu -->
     <div id="leaderboard">
       <h3>Lider Tablosu</h3>
       <ol id="leaderboardList"></ol>
+    </div>
+    
+    <!-- Admin Panel -->
+    <div id="adminPanel">
+      <input type="password" id="adminInput" placeholder="Admin Password">
+      <button id="adminLoginBtn">Login</button>
+      
+      <div id="adminControls" style="display: none;">
+        <h4>Admin Controls</h4>
+        <button id="addBotBtn">+ Add Bot</button>
+        <button id="removeBotBtn">- Remove Bot</button>
+        <div class="admin-section">
+          <input type="text" id="targetPlayerName" placeholder="Player Name">
+          <input type="number" id="foodAmount" placeholder="Amount (+/-)">
+          <button id="modifyPlayerBtn">Modify</button>
+        </div>
+      </div>
     </div>
     
     <!-- Mobil Joystick -->
