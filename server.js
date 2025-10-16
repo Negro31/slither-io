@@ -1,5 +1,5 @@
 // ============================================
-// SERVER.JS - Fully Optimized & Fixed
+// SERVER.JS - Fixed Boost + Admin Panel + AI Bots
 // ============================================
 
 const express = require('express');
@@ -17,7 +17,7 @@ const io = socketIo(server, {
     methods: ['GET', 'POST']
   },
   transports: ['websocket', 'polling'],
-  maxHttpBufferSize: 1e6 // 1MB buffer
+  maxHttpBufferSize: 1e6
 });
 
 app.use(express.static(path.join(__dirname, 'public')));
@@ -38,22 +38,27 @@ const CONFIG = {
   MAP_HEIGHT: 3000,
   MAP_BORDER: 100,
   FOOD_COUNT: 250,
-  BASE_SPEED: 4, // Kucuk yilan hizi
-  MIN_SPEED: 2, // Maksimum buyuklukta hiz
-  BOOST_MULTIPLIER: 1.8, // Hizlanma carpani
-  BOOST_SHRINK_RATE: 1, // Her tick'te kac segment kuculsun (hizlanirken)
+  BASE_SPEED: 4,
+  MIN_SPEED: 2,
+  BOOST_MULTIPLIER: 1.8,
+  BOOST_DRAIN_RATE: 1, // Saniyede kac segment azalsın
   SEGMENT_SIZE: 10,
-  TICK_RATE: 40, // 25 FPS server (daha optimize)
+  TICK_RATE: 30, // 33 FPS server (daha az gecikme)
   SPAWN_MARGIN: 400,
   COLLISION_THRESHOLD: 8,
   MIN_SNAKE_LENGTH: 10,
-  DEATH_FOOD_RATIO: 0.3, // Olumde %30 yem
-  SPEED_DECAY_FACTOR: 0.002 // Buyukluge gore yavaslama
+  DEATH_FOOD_RATIO: 0.3,
+  SPEED_DECAY_FACTOR: 0.002
 };
 
 let players = {};
+let bots = {};
 let foods = [];
 let lastCleanup = Date.now();
+let botIdCounter = 0;
+let admins = {}; // Admin yetkisi olan socketler
+
+const ADMIN_PASSWORD = 'ZarchBabaPro31';
 
 function randomPos(max) {
   return Math.floor(Math.random() * max);
@@ -81,9 +86,10 @@ function findSafeSpawnPosition() {
     const y = randomPos(CONFIG.MAP_HEIGHT - CONFIG.SPAWN_MARGIN * 2) + CONFIG.SPAWN_MARGIN;
     
     let isSafe = true;
-    for (let id in players) {
-      if (!players[id].alive) continue;
-      const otherHead = players[id].segments[0];
+    const allSnakes = { ...players, ...bots };
+    for (let id in allSnakes) {
+      if (!allSnakes[id].alive) continue;
+      const otherHead = allSnakes[id].segments[0];
       if (Math.hypot(x - otherHead.x, y - otherHead.y) < 300) {
         isSafe = false;
         break;
@@ -115,11 +121,12 @@ function createSnake() {
     color: randomColor(),
     alive: true,
     spawnTime: Date.now(),
-    boosting: false
+    boosting: false,
+    boostStartTime: 0,
+    lastBoostDrain: Date.now()
   };
 }
 
-// Dinamik hiz hesaplama
 function calculateSpeed(segmentCount, boosting) {
   const baseSpeed = CONFIG.BASE_SPEED - (segmentCount * CONFIG.SPEED_DECAY_FACTOR);
   const speed = Math.max(baseSpeed, CONFIG.MIN_SPEED);
@@ -169,20 +176,31 @@ function moveSnake(snake, boosting) {
   const head = snake.segments[0];
   const speed = calculateSpeed(snake.segments.length, boosting);
   
-  // Yeni bas ekle
   snake.segments.unshift({
     x: head.x + snake.dx * speed,
     y: head.y + snake.dy * speed
   });
   
-  // Hizlanma: Extra segment sil
+  // HIZLANMA KUCULMESI - Her saniye 1 segment
   if (boosting && snake.segments.length > CONFIG.MIN_SNAKE_LENGTH) {
-    for (let i = 0; i < CONFIG.BOOST_SHRINK_RATE; i++) {
-      snake.segments.pop();
+    const now = Date.now();
+    const timeSinceLastDrain = now - snake.lastBoostDrain;
+    
+    // Her 1000ms'de 1 segment kucul
+    if (timeSinceLastDrain >= 1000) {
+      const segmentsToDrain = Math.floor(timeSinceLastDrain / 1000);
+      for (let i = 0; i < segmentsToDrain; i++) {
+        if (snake.segments.length > CONFIG.MIN_SNAKE_LENGTH) {
+          snake.segments.pop();
+        }
+      }
+      snake.lastBoostDrain = now;
     }
+  } else {
+    snake.lastBoostDrain = Date.now();
   }
   
-  // Normal: Son segmenti sil (sabit uzunluk)
+  // Normal hareket - son segmenti sil
   snake.segments.pop();
 }
 
@@ -193,34 +211,163 @@ function growSnake(snake, count) {
   }
 }
 
-// Performans optimizasyonu: Fazla yemleri temizle
+function shrinkSnake(snake, count) {
+  for (let i = 0; i < count; i++) {
+    if (snake.segments.length > CONFIG.MIN_SNAKE_LENGTH) {
+      snake.segments.pop();
+    }
+  }
+}
+
 function cleanupFoods() {
   if (foods.length > CONFIG.FOOD_COUNT * 2) {
     foods = foods.slice(0, CONFIG.FOOD_COUNT * 1.5);
   }
 }
 
+// AI BOT LOGIC
+function createBot() {
+  const botNames = ['BotAlpha', 'BotBeta', 'BotGamma', 'BotDelta', 'BotOmega', 'BotZeta', 'BotSigma'];
+  const botId = 'bot_' + (botIdCounter++);
+  const snake = createSnake();
+  
+  bots[botId] = {
+    name: botNames[Math.floor(Math.random() * botNames.length)] + botIdCounter,
+    segments: snake.segments,
+    dx: snake.dx,
+    dy: snake.dy,
+    color: snake.color,
+    alive: snake.alive,
+    spawnTime: snake.spawnTime,
+    score: 15,
+    boosting: false,
+    lastBoostDrain: Date.now(),
+    target: null,
+    lastTargetUpdate: Date.now()
+  };
+  
+  return botId;
+}
+
+function updateBotAI(botId) {
+  const bot = bots[botId];
+  if (!bot || !bot.alive) return;
+  
+  const now = Date.now();
+  const head = bot.segments[0];
+  
+  // Her 500ms'de hedef guncelle
+  if (now - bot.lastTargetUpdate > 500) {
+    bot.target = findBotTarget(bot);
+    bot.lastTargetUpdate = now;
+  }
+  
+  if (bot.target) {
+    const dx = bot.target.x - head.x;
+    const dy = bot.target.y - head.y;
+    const len = Math.hypot(dx, dy);
+    
+    if (len > 10) {
+      bot.dx = dx / len;
+      bot.dy = dy / len;
+    }
+  }
+  
+  // Rastgele hizlanma (agresif davranis)
+  if (bot.segments.length > 30 && Math.random() < 0.05) {
+    bot.boosting = true;
+    setTimeout(() => { if (bots[botId]) bots[botId].boosting = false; }, 1000);
+  }
+}
+
+function findBotTarget(bot) {
+  const head = bot.segments[0];
+  const allSnakes = { ...players, ...bots };
+  
+  // 1. Yakin yem ara
+  let closestFood = null;
+  let closestFoodDist = Infinity;
+  
+  for (let food of foods) {
+    const dist = Math.hypot(food.x - head.x, food.y - head.y);
+    if (dist < closestFoodDist && dist < 300) {
+      closestFoodDist = dist;
+      closestFood = food;
+    }
+  }
+  
+  // 2. Kendinden kucuk yilan ara (saldir)
+  let closestPrey = null;
+  let closestPreyDist = Infinity;
+  
+  for (let id in allSnakes) {
+    const other = allSnakes[id];
+    if (id === bot.name || !other.alive) continue;
+    if (other.segments.length < bot.segments.length * 0.7) {
+      const otherHead = other.segments[0];
+      const dist = Math.hypot(otherHead.x - head.x, otherHead.y - head.y);
+      if (dist < closestPreyDist && dist < 400) {
+        closestPreyDist = dist;
+        closestPrey = otherHead;
+      }
+    }
+  }
+  
+  // 3. Buyuk yilandan kac
+  for (let id in allSnakes) {
+    const other = allSnakes[id];
+    if (id === bot.name || !other.alive) continue;
+    if (other.segments.length > bot.segments.length * 1.3) {
+      const otherHead = other.segments[0];
+      const dist = Math.hypot(otherHead.x - head.x, otherHead.y - head.y);
+      if (dist < 200) {
+        // Kac - ters yon
+        const dx = head.x - otherHead.x;
+        const dy = head.y - otherHead.y;
+        return { x: head.x + dx, y: head.y + dy };
+      }
+    }
+  }
+  
+  // Oncelik: Av > Yem
+  if (closestPrey) return closestPrey;
+  if (closestFood) return closestFood;
+  
+  // Rastgele hareket
+  const angle = Math.random() * Math.PI * 2;
+  return {
+    x: head.x + Math.cos(angle) * 200,
+    y: head.y + Math.sin(angle) * 200
+  };
+}
+
 function gameLoop() {
   const now = Date.now();
   
-  // Her 5 saniyede bir temizlik
   if (now - lastCleanup > 5000) {
     cleanupFoods();
     lastCleanup = now;
   }
   
-  for (let id in players) {
-    const player = players[id];
-    if (!player.alive) continue;
+  const allSnakes = { ...players, ...bots };
+  
+  // Bot AI guncelle
+  for (let botId in bots) {
+    updateBotAI(botId);
+  }
+  
+  // Tum yilanlari hareket ettir
+  for (let id in allSnakes) {
+    const entity = allSnakes[id];
+    if (!entity.alive) continue;
     
-    moveSnake(player, player.boosting);
+    moveSnake(entity, entity.boosting);
     
-    const eatenFoods = checkFoodCollision(player);
+    const eatenFoods = checkFoodCollision(entity);
     if (eatenFoods.length > 0) {
-      growSnake(player, eatenFoods.length);
-      player.score = player.segments.length;
+      growSnake(entity, eatenFoods.length);
+      entity.score = entity.segments.length;
       
-      // Yenilen yemleri yeniden olustur
       for (let i = eatenFoods.length - 1; i >= 0; i--) {
         foods[eatenFoods[i]] = {
           x: randomPos(CONFIG.MAP_WIDTH - CONFIG.MAP_BORDER * 2) + CONFIG.MAP_BORDER,
@@ -230,47 +377,47 @@ function gameLoop() {
       }
     }
     
-    if (checkCollision(player, players, id)) {
-      player.alive = false;
+    if (checkCollision(entity, allSnakes, id)) {
+      entity.alive = false;
       
-      // SADECE %30 YEM OLUSTUR
-      const deathFoodCount = Math.floor(player.segments.length * CONFIG.DEATH_FOOD_RATIO);
-      const step = Math.floor(player.segments.length / deathFoodCount);
+      const deathFoodCount = Math.floor(entity.segments.length * CONFIG.DEATH_FOOD_RATIO);
+      const step = Math.floor(entity.segments.length / deathFoodCount);
       
-      for (let i = 0; i < player.segments.length; i += step) {
-        const seg = player.segments[i];
+      for (let i = 0; i < entity.segments.length; i += step) {
+        const seg = entity.segments[i];
         if (seg.x > CONFIG.MAP_BORDER && seg.x < CONFIG.MAP_WIDTH - CONFIG.MAP_BORDER &&
             seg.y > CONFIG.MAP_BORDER && seg.y < CONFIG.MAP_HEIGHT - CONFIG.MAP_BORDER) {
           foods.push({
             x: seg.x,
             y: seg.y,
-            c: player.color
+            c: entity.color
           });
         }
       }
       
-      io.to(id).emit('death', player.score);
-      
-      setTimeout(() => {
-        delete players[id];
-      }, 100);
+      if (players[id]) {
+        io.to(id).emit('death', entity.score);
+        setTimeout(() => { delete players[id]; }, 100);
+      } else if (bots[id]) {
+        setTimeout(() => { delete bots[id]; }, 100);
+      }
     }
   }
   
-  // Optimize edilmis state gonderimi
+  // State gonder
   const state = {
-    p: {}, // players
-    f: foods.slice(0, 400) // Max 400 yem gonder
+    p: {},
+    f: foods.slice(0, 400)
   };
   
-  for (let id in players) {
-    if (players[id].alive) {
+  for (let id in allSnakes) {
+    if (allSnakes[id].alive) {
       state.p[id] = {
-        n: players[id].name,
-        s: players[id].segments,
-        c: players[id].color,
-        sc: players[id].score,
-        b: players[id].boosting
+        n: allSnakes[id].name,
+        s: allSnakes[id].segments,
+        c: allSnakes[id].color,
+        sc: allSnakes[id].score,
+        b: allSnakes[id].boosting
       };
     }
   }
@@ -292,7 +439,8 @@ io.on('connection', (socket) => {
       alive: snake.alive,
       spawnTime: snake.spawnTime,
       score: 15,
-      boosting: false
+      boosting: false,
+      lastBoostDrain: Date.now()
     };
     
     socket.emit('init', {
@@ -319,9 +467,64 @@ io.on('connection', (socket) => {
     }
   });
   
+  // ADMIN COMMANDS
+  socket.on('adminLogin', (password) => {
+    if (password === ADMIN_PASSWORD) {
+      admins[socket.id] = true;
+      socket.emit('adminAccess', true);
+      console.log('Admin logged in:', socket.id);
+    } else {
+      socket.emit('adminAccess', false);
+    }
+  });
+  
+  socket.on('addBot', () => {
+    if (!admins[socket.id]) return;
+    const botId = createBot();
+    console.log('Bot created:', botId);
+    socket.emit('botCreated', { id: botId, name: bots[botId].name });
+  });
+  
+  socket.on('removeBot', () => {
+    if (!admins[socket.id]) return;
+    const botIds = Object.keys(bots);
+    if (botIds.length > 0) {
+      const botId = botIds[0];
+      delete bots[botId];
+      console.log('Bot removed:', botId);
+      socket.emit('botRemoved', botId);
+    }
+  });
+  
+  socket.on('modifyPlayer', (data) => {
+    if (!admins[socket.id]) return;
+    
+    const allSnakes = { ...players, ...bots };
+    let targetId = null;
+    
+    for (let id in allSnakes) {
+      if (allSnakes[id].name === data.playerName) {
+        targetId = id;
+        break;
+      }
+    }
+    
+    if (targetId && allSnakes[targetId].alive) {
+      const amount = parseInt(data.amount);
+      if (amount > 0) {
+        growSnake(allSnakes[targetId], amount);
+      } else {
+        shrinkSnake(allSnakes[targetId], Math.abs(amount));
+      }
+      allSnakes[targetId].score = allSnakes[targetId].segments.length;
+      console.log('Modified player:', data.playerName, 'by', amount);
+    }
+  });
+  
   socket.on('disconnect', () => {
     console.log('Player disconnected:', socket.id);
     delete players[socket.id];
+    delete admins[socket.id];
   });
 });
 
