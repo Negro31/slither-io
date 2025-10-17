@@ -27,19 +27,31 @@
       <ol id="leaderboardList"></ol>
     </div>
     
-    <!-- Admin Panel -->
-    <div id="adminPanel">
-      <input type="password" id="adminInput" placeholder="Admin Password">
-      <button id="adminLoginBtn">Login</button>
-      
-      <div id="adminControls" style="display: none;">
-        <h4>Admin Controls</h4>
-        <button id="addBotBtn">+ Add Bot</button>
-        <button id="removeBotBtn">- Remove Bot</button>
-        <div class="admin-section">
-          <input type="text" id="targetPlayerName" placeholder="Player Name">
-          <input type="number" id="foodAmount" placeholder="Amount (+/-)">
-          <button id="modifyPlayerBtn">Modify</button>
+    <!-- Admin Toggle Button -->
+    <div id="adminToggleBtn" style="display: none;">
+      <span>⚙️</span>
+    </div>
+    
+    <!-- Admin Panel (Draggable) -->
+    <div id="adminPanel" style="display: none;">
+      <div id="adminPanelHeader">
+        <span id="adminDragHandle">⋮⋮</span>
+        <span>Admin Panel</span>
+        <span id="adminCloseBtn">✖</span>
+      </div>
+      <div id="adminPanelContent">
+        <input type="password" id="adminInput" placeholder="Password">
+        <button id="adminLoginBtn">Login</button>
+        
+        <div id="adminControls" style="display: none;">
+          <h4>Controls</h4>
+          <button id="addBotBtn">+ Add Bot</button>
+          <button id="removeBotBtn">- Remove Bot</button>
+          <div class="admin-section">
+            <input type="text" id="targetPlayerName" placeholder="Player Name">
+            <input type="number" id="foodAmount" placeholder="Amount (+/-)">
+            <button id="modifyPlayerBtn">Modify</button>
+          </div>
         </div>
       </div>
     </div>
