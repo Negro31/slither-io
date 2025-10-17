@@ -1,5 +1,5 @@
 // ============================================
-// SERVER.JS - Fixed Boost + Admin Panel + AI Bots
+// SERVER.JS - Ultra Optimized + Smart AI Bots
 // ============================================
 
 const express = require('express');
@@ -12,38 +12,33 @@ const server = http.createServer(app);
 const io = socketIo(server, {
   pingTimeout: 60000,
   pingInterval: 25000,
-  cors: {
-    origin: '*',
-    methods: ['GET', 'POST']
-  },
+  cors: { origin: '*', methods: ['GET', 'POST'] },
   transports: ['websocket', 'polling'],
-  maxHttpBufferSize: 1e6
+  maxHttpBufferSize: 5e5, // 500KB buffer
+  perMessageDeflate: false // Disable compression for speed
 });
 
 app.use(express.static(path.join(__dirname, 'public')));
-
 app.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*');
-  res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
   next();
 });
 
 app.get('/health', (req, res) => {
-  res.json({ status: 'ok', players: Object.keys(players).length });
+  res.json({ status: 'ok', players: Object.keys(players).length, bots: Object.keys(bots).length });
 });
 
 const CONFIG = {
   MAP_WIDTH: 3000,
   MAP_HEIGHT: 3000,
   MAP_BORDER: 100,
-  FOOD_COUNT: 250,
+  FOOD_COUNT: 200,
   BASE_SPEED: 4,
   MIN_SPEED: 2,
   BOOST_MULTIPLIER: 1.8,
-  BOOST_DRAIN_RATE: 1, // Saniyede kac segment azalsın
+  BOOST_DRAIN_RATE: 1,
   SEGMENT_SIZE: 10,
-  TICK_RATE: 30, // 33 FPS server (daha az gecikme)
+  TICK_RATE: 50, // 20 FPS server (optimized)
   SPAWN_MARGIN: 400,
   COLLISION_THRESHOLD: 8,
   MIN_SNAKE_LENGTH: 10,
@@ -56,12 +51,13 @@ let bots = {};
 let foods = [];
 let lastCleanup = Date.now();
 let botIdCounter = 0;
-let admins = {}; // Admin yetkisi olan socketler
+let admins = {};
+let botRespawnQueue = []; // Bot respawn queue
 
 const ADMIN_PASSWORD = 'ZarchBabaPro31';
 
-function randomPos(max) {
-  return Math.floor(Math.random() * max);
+function randomPos(min, max) {
+  return Math.floor(Math.random() * (max - min)) + min;
 }
 
 function randomColor() {
@@ -71,26 +67,31 @@ function randomColor() {
 
 function initFoods() {
   foods = [];
+  const min = CONFIG.MAP_BORDER;
+  const max = CONFIG.MAP_WIDTH - CONFIG.MAP_BORDER;
   for (let i = 0; i < CONFIG.FOOD_COUNT; i++) {
     foods.push({
-      x: randomPos(CONFIG.MAP_WIDTH - CONFIG.MAP_BORDER * 2) + CONFIG.MAP_BORDER,
-      y: randomPos(CONFIG.MAP_HEIGHT - CONFIG.MAP_BORDER * 2) + CONFIG.MAP_BORDER,
+      x: randomPos(min, max),
+      y: randomPos(min, max),
       c: randomColor()
     });
   }
 }
 
 function findSafeSpawnPosition() {
-  for (let attempts = 0; attempts < 30; attempts++) {
-    const x = randomPos(CONFIG.MAP_WIDTH - CONFIG.SPAWN_MARGIN * 2) + CONFIG.SPAWN_MARGIN;
-    const y = randomPos(CONFIG.MAP_HEIGHT - CONFIG.SPAWN_MARGIN * 2) + CONFIG.SPAWN_MARGIN;
+  const min = CONFIG.SPAWN_MARGIN;
+  const max = CONFIG.MAP_WIDTH - CONFIG.SPAWN_MARGIN;
+  
+  for (let attempts = 0; attempts < 20; attempts++) {
+    const x = randomPos(min, max);
+    const y = randomPos(min, max);
     
     let isSafe = true;
     const allSnakes = { ...players, ...bots };
     for (let id in allSnakes) {
       if (!allSnakes[id].alive) continue;
       const otherHead = allSnakes[id].segments[0];
-      if (Math.hypot(x - otherHead.x, y - otherHead.y) < 300) {
+      if (Math.hypot(x - otherHead.x, y - otherHead.y) < 250) {
         isSafe = false;
         break;
       }
@@ -122,7 +123,6 @@ function createSnake() {
     alive: true,
     spawnTime: Date.now(),
     boosting: false,
-    boostStartTime: 0,
     lastBoostDrain: Date.now()
   };
 }
@@ -138,8 +138,9 @@ function checkCollision(snake, allPlayers, playerId) {
   
   if (Date.now() - snake.spawnTime < 2000) return false;
   
-  if (head.x <= CONFIG.MAP_BORDER || head.x >= CONFIG.MAP_WIDTH - CONFIG.MAP_BORDER || 
-      head.y <= CONFIG.MAP_BORDER || head.y >= CONFIG.MAP_HEIGHT - CONFIG.MAP_BORDER) {
+  // Harita sinirlari - daha genis guvenli bolge
+  if (head.x <= CONFIG.MAP_BORDER + 10 || head.x >= CONFIG.MAP_WIDTH - CONFIG.MAP_BORDER - 10 || 
+      head.y <= CONFIG.MAP_BORDER + 10 || head.y >= CONFIG.MAP_HEIGHT - CONFIG.MAP_BORDER - 10) {
     return true;
   }
   
@@ -181,12 +182,10 @@ function moveSnake(snake, boosting) {
     y: head.y + snake.dy * speed
   });
   
-  // HIZLANMA KUCULMESI - Her saniye 1 segment
   if (boosting && snake.segments.length > CONFIG.MIN_SNAKE_LENGTH) {
     const now = Date.now();
     const timeSinceLastDrain = now - snake.lastBoostDrain;
     
-    // Her 1000ms'de 1 segment kucul
     if (timeSinceLastDrain >= 1000) {
       const segmentsToDrain = Math.floor(timeSinceLastDrain / 1000);
       for (let i = 0; i < segmentsToDrain; i++) {
@@ -200,7 +199,6 @@ function moveSnake(snake, boosting) {
     snake.lastBoostDrain = Date.now();
   }
   
-  // Normal hareket - son segmenti sil
   snake.segments.pop();
 }
 
@@ -221,18 +219,23 @@ function shrinkSnake(snake, count) {
 
 function cleanupFoods() {
   if (foods.length > CONFIG.FOOD_COUNT * 2) {
-    foods = foods.slice(0, CONFIG.FOOD_COUNT * 1.5);
+    foods = foods.slice(0, Math.floor(CONFIG.FOOD_COUNT * 1.5));
   }
 }
 
-// AI BOT LOGIC
-function createBot() {
-  const botNames = ['BotAlpha', 'BotBeta', 'BotGamma', 'BotDelta', 'BotOmega', 'BotZeta', 'BotSigma'];
+// ============================================
+// SMART AI BOT LOGIC
+// ============================================
+
+function createBot(name) {
+  const botNames = ['AlphaBot', 'BetaBot', 'GammaBot', 'DeltaBot', 'OmegaBot', 'SigmaBot', 'ThetaBot'];
   const botId = 'bot_' + (botIdCounter++);
   const snake = createSnake();
+  const botName = name || (botNames[Math.floor(Math.random() * botNames.length)] + botIdCounter);
   
   bots[botId] = {
-    name: botNames[Math.floor(Math.random() * botNames.length)] + botIdCounter,
+    id: botId,
+    name: botName,
     segments: snake.segments,
     dx: snake.dx,
     dy: snake.dy,
@@ -243,7 +246,9 @@ function createBot() {
     boosting: false,
     lastBoostDrain: Date.now(),
     target: null,
-    lastTargetUpdate: Date.now()
+    lastTargetUpdate: Date.now(),
+    strategy: 'hunt', // hunt, flee, feed
+    shouldRespawn: true
   };
   
   return botId;
@@ -255,91 +260,161 @@ function updateBotAI(botId) {
   
   const now = Date.now();
   const head = bot.segments[0];
+  const allSnakes = { ...players, ...bots };
   
-  // Her 500ms'de hedef guncelle
-  if (now - bot.lastTargetUpdate > 500) {
-    bot.target = findBotTarget(bot);
+  // Harita sinirlarindan uzak dur
+  const borderMargin = 150;
+  if (head.x < borderMargin || head.x > CONFIG.MAP_WIDTH - borderMargin ||
+      head.y < borderMargin || head.y > CONFIG.MAP_HEIGHT - borderMargin) {
+    // Merkeze don
+    const centerX = CONFIG.MAP_WIDTH / 2;
+    const centerY = CONFIG.MAP_HEIGHT / 2;
+    const dx = centerX - head.x;
+    const dy = centerY - head.y;
+    const len = Math.hypot(dx, dy);
+    if (len > 0) {
+      bot.dx = dx / len;
+      bot.dy = dy / len;
+    }
+    bot.boosting = false;
+    return;
+  }
+  
+  // Her 300ms'de hedef ve strateji guncelle (daha hizli reaction)
+  if (now - bot.lastTargetUpdate > 300) {
+    updateBotStrategy(bot, allSnakes);
     bot.lastTargetUpdate = now;
   }
   
   if (bot.target) {
-    const dx = bot.target.x - head.x;
-    const dy = bot.target.y - head.y;
-    const len = Math.hypot(dx, dy);
-    
-    if (len > 10) {
-      bot.dx = dx / len;
-      bot.dy = dy / len;
-    }
-  }
-  
-  // Rastgele hizlanma (agresif davranis)
-  if (bot.segments.length > 30 && Math.random() < 0.05) {
-    bot.boosting = true;
-    setTimeout(() => { if (bots[botId]) bots[botId].boosting = false; }, 1000);
+    executeBotStrategy(bot, allSnakes);
   }
 }
 
-function findBotTarget(bot) {
+function updateBotStrategy(bot, allSnakes) {
   const head = bot.segments[0];
-  const allSnakes = { ...players, ...bots };
   
-  // 1. Yakin yem ara
+  // 1. Tehlike kontrolu - Buyuk yilanlar yakin mi?
+  let dangerousSnake = null;
+  let minDangerDist = Infinity;
+  
+  for (let id in allSnakes) {
+    const other = allSnakes[id];
+    if (id === bot.id || !other.alive) continue;
+    
+    if (other.segments.length > bot.segments.length * 1.2) {
+      const otherHead = other.segments[0];
+      const dist = Math.hypot(otherHead.x - head.x, otherHead.y - head.y);
+      if (dist < 300 && dist < minDangerDist) {
+        minDangerDist = dist;
+        dangerousSnake = other;
+      }
+    }
+  }
+  
+  if (dangerousSnake) {
+    bot.strategy = 'flee';
+    const otherHead = dangerousSnake.segments[0];
+    // Kacma yonu - ters yon
+    bot.target = {
+      x: head.x + (head.x - otherHead.x) * 2,
+      y: head.y + (head.y - otherHead.y) * 2
+    };
+    bot.boosting = bot.segments.length > 20; // Hizlanarak kac
+    return;
+  }
+  
+  // 2. Av kontrolu - Kucuk yilanlar yakin mi?
+  let prey = null;
+  let minPreyDist = Infinity;
+  
+  for (let id in allSnakes) {
+    const other = allSnakes[id];
+    if (id === bot.id || !other.alive) continue;
+    
+    if (other.segments.length < bot.segments.length * 0.75) {
+      const otherHead = other.segments[0];
+      const dist = Math.hypot(otherHead.x - head.x, otherHead.y - head.y);
+      if (dist < 400 && dist < minPreyDist) {
+        minPreyDist = dist;
+        prey = other;
+      }
+    }
+  }
+  
+  if (prey) {
+    bot.strategy = 'hunt';
+    bot.target = calculateEncirclementPoint(bot, prey);
+    bot.boosting = bot.segments.length > 30 && minPreyDist < 200;
+    return;
+  }
+  
+  // 3. Yem yeme modu
+  bot.strategy = 'feed';
   let closestFood = null;
-  let closestFoodDist = Infinity;
+  let minFoodDist = Infinity;
   
   for (let food of foods) {
     const dist = Math.hypot(food.x - head.x, food.y - head.y);
-    if (dist < closestFoodDist && dist < 300) {
-      closestFoodDist = dist;
+    if (dist < minFoodDist && dist < 400) {
+      minFoodDist = dist;
       closestFood = food;
     }
   }
   
-  // 2. Kendinden kucuk yilan ara (saldir)
-  let closestPrey = null;
-  let closestPreyDist = Infinity;
-  
-  for (let id in allSnakes) {
-    const other = allSnakes[id];
-    if (id === bot.name || !other.alive) continue;
-    if (other.segments.length < bot.segments.length * 0.7) {
-      const otherHead = other.segments[0];
-      const dist = Math.hypot(otherHead.x - head.x, otherHead.y - head.y);
-      if (dist < closestPreyDist && dist < 400) {
-        closestPreyDist = dist;
-        closestPrey = otherHead;
-      }
-    }
+  if (closestFood) {
+    bot.target = closestFood;
+  } else {
+    // Rastgele hareket - harita merkezine dogru
+    const angle = Math.random() * Math.PI * 2;
+    bot.target = {
+      x: CONFIG.MAP_WIDTH / 2 + Math.cos(angle) * 300,
+      y: CONFIG.MAP_HEIGHT / 2 + Math.sin(angle) * 300
+    };
   }
+  bot.boosting = false;
+}
+
+// Kuşatma noktasi hesapla - Avin onunu kes
+function calculateEncirclementPoint(bot, prey) {
+  const botHead = bot.segments[0];
+  const preyHead = prey.segments[0];
   
-  // 3. Buyuk yilandan kac
-  for (let id in allSnakes) {
-    const other = allSnakes[id];
-    if (id === bot.name || !other.alive) continue;
-    if (other.segments.length > bot.segments.length * 1.3) {
-      const otherHead = other.segments[0];
-      const dist = Math.hypot(otherHead.x - head.x, otherHead.y - head.y);
-      if (dist < 200) {
-        // Kac - ters yon
-        const dx = head.x - otherHead.x;
-        const dy = head.y - otherHead.y;
-        return { x: head.x + dx, y: head.y + dy };
-      }
-    }
-  }
+  // Avin hareket yonunu tahmin et
+  const preyDx = prey.dx || 0;
+  const preyDy = prey.dy || 0;
   
-  // Oncelik: Av > Yem
-  if (closestPrey) return closestPrey;
-  if (closestFood) return closestFood;
+  // Avin gelecekteki konumunu tahmin et (0.5 saniye sonra)
+  const predictionTime = 500;
+  const speed = calculateSpeed(prey.segments.length, prey.boosting);
+  const predictedX = preyHead.x + preyDx * speed * predictionTime / CONFIG.TICK_RATE;
+  const predictedY = preyHead.y + preyDy * speed * predictionTime / CONFIG.TICK_RATE;
   
-  // Rastgele hareket
-  const angle = Math.random() * Math.PI * 2;
+  // Bu konumun onune gec
   return {
-    x: head.x + Math.cos(angle) * 200,
-    y: head.y + Math.sin(angle) * 200
+    x: predictedX + preyDx * 50,
+    y: predictedY + preyDy * 50
   };
 }
+
+function executeBotStrategy(bot, allSnakes) {
+  const head = bot.segments[0];
+  
+  if (!bot.target) return;
+  
+  const dx = bot.target.x - head.x;
+  const dy = bot.target.y - head.y;
+  const len = Math.hypot(dx, dy);
+  
+  if (len > 5) {
+    bot.dx = dx / len;
+    bot.dy = dy / len;
+  }
+}
+
+// ============================================
+// GAME LOOP
+// ============================================
 
 function gameLoop() {
   const now = Date.now();
@@ -347,6 +422,14 @@ function gameLoop() {
   if (now - lastCleanup > 5000) {
     cleanupFoods();
     lastCleanup = now;
+  }
+  
+  // Bot respawn kontrolu
+  if (botRespawnQueue.length > 0) {
+    const toRespawn = botRespawnQueue.shift();
+    if (toRespawn.shouldRespawn) {
+      createBot(toRespawn.name);
+    }
   }
   
   const allSnakes = { ...players, ...bots };
@@ -368,10 +451,13 @@ function gameLoop() {
       growSnake(entity, eatenFoods.length);
       entity.score = entity.segments.length;
       
+      // Yem yenileme - optimize
       for (let i = eatenFoods.length - 1; i >= 0; i--) {
+        const min = CONFIG.MAP_BORDER;
+        const max = CONFIG.MAP_WIDTH - CONFIG.MAP_BORDER;
         foods[eatenFoods[i]] = {
-          x: randomPos(CONFIG.MAP_WIDTH - CONFIG.MAP_BORDER * 2) + CONFIG.MAP_BORDER,
-          y: randomPos(CONFIG.MAP_HEIGHT - CONFIG.MAP_BORDER * 2) + CONFIG.MAP_BORDER,
+          x: randomPos(min, max),
+          y: randomPos(min, max),
           c: randomColor()
         };
       }
@@ -380,8 +466,9 @@ function gameLoop() {
     if (checkCollision(entity, allSnakes, id)) {
       entity.alive = false;
       
-      const deathFoodCount = Math.floor(entity.segments.length * CONFIG.DEATH_FOOD_RATIO);
-      const step = Math.floor(entity.segments.length / deathFoodCount);
+      // DAIMA %30 yem olustur
+      const deathFoodCount = Math.max(3, Math.floor(entity.segments.length * CONFIG.DEATH_FOOD_RATIO));
+      const step = Math.max(1, Math.floor(entity.segments.length / deathFoodCount));
       
       for (let i = 0; i < entity.segments.length; i += step) {
         const seg = entity.segments[i];
@@ -399,22 +486,34 @@ function gameLoop() {
         io.to(id).emit('death', entity.score);
         setTimeout(() => { delete players[id]; }, 100);
       } else if (bots[id]) {
-        setTimeout(() => { delete bots[id]; }, 100);
+        // Bot respawn queue'ya ekle
+        if (bots[id].shouldRespawn) {
+          setTimeout(() => {
+            botRespawnQueue.push({ name: bots[id].name, shouldRespawn: true });
+          }, 3000); // 3 saniye sonra respawn
+        }
+        delete bots[id];
       }
     }
   }
   
-  // State gonder
+  // State gonder - COMPACT format
   const state = {
     p: {},
-    f: foods.slice(0, 400)
+    f: foods.slice(0, 300) // Max 300 yem
   };
   
   for (let id in allSnakes) {
     if (allSnakes[id].alive) {
+      // Segment optimizasyonu - her 2 segmentten 1'ini gonder (buyuk yilanlar icin)
+      const segments = allSnakes[id].segments;
+      const optimizedSegments = segments.length > 50 
+        ? segments.filter((_, i) => i % 2 === 0) 
+        : segments;
+      
       state.p[id] = {
         n: allSnakes[id].name,
-        s: allSnakes[id].segments,
+        s: optimizedSegments,
         c: allSnakes[id].color,
         sc: allSnakes[id].score,
         b: allSnakes[id].boosting
@@ -422,8 +521,12 @@ function gameLoop() {
     }
   }
   
-  io.emit('gameState', state);
+  io.volatile.emit('gameState', state); // volatile = packet loss OK
 }
+
+// ============================================
+// SOCKET.IO EVENTS
+// ============================================
 
 io.on('connection', (socket) => {
   console.log('Player connected:', socket.id);
@@ -481,7 +584,7 @@ io.on('connection', (socket) => {
   socket.on('addBot', () => {
     if (!admins[socket.id]) return;
     const botId = createBot();
-    console.log('Bot created:', botId);
+    console.log('Bot created:', botId, bots[botId].name);
     socket.emit('botCreated', { id: botId, name: bots[botId].name });
   });
   
@@ -490,6 +593,7 @@ io.on('connection', (socket) => {
     const botIds = Object.keys(bots);
     if (botIds.length > 0) {
       const botId = botIds[0];
+      bots[botId].shouldRespawn = false; // Respawn engelle
       delete bots[botId];
       console.log('Bot removed:', botId);
       socket.emit('botRemoved', botId);
@@ -534,4 +638,5 @@ setInterval(gameLoop, CONFIG.TICK_RATE);
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, '0.0.0.0', () => {
   console.log('Server running on port: ' + PORT);
+  console.log('Admin password: ' + ADMIN_PASSWORD);
 });
