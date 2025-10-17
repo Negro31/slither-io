@@ -1,5 +1,5 @@
 /* ============================================
-   STYLE.CSS - Complete with Admin Panel
+   STYLE.CSS - Complete with Draggable Admin
    ============================================ */
 
 * {
@@ -167,32 +167,98 @@ body {
 }
 
 /* ============================================
-   ADMIN PANEL
+   ADMIN TOGGLE BUTTON
+   ============================================ */
+
+#adminToggleBtn {
+  position: fixed;
+  top: 20px;
+  left: 20px;
+  width: 50px;
+  height: 50px;
+  background: rgba(255, 193, 7, 0.9);
+  border-radius: 50%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-size: 24px;
+  cursor: pointer;
+  box-shadow: 0 4px 15px rgba(255, 193, 7, 0.5);
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  z-index: 100;
+  transition: all 0.3s;
+}
+
+#adminToggleBtn:hover {
+  transform: scale(1.1);
+  box-shadow: 0 6px 20px rgba(255, 193, 7, 0.7);
+}
+
+#adminToggleBtn:active {
+  transform: scale(0.95);
+}
+
+/* ============================================
+   ADMIN PANEL (DRAGGABLE)
    ============================================ */
 
 #adminPanel {
   position: fixed;
-  top: 20px;
+  top: 80px;
   left: 20px;
-  background: rgba(0, 0, 0, 0.85);
-  padding: 15px;
+  background: rgba(0, 0, 0, 0.92);
   border-radius: 10px;
-  min-width: 220px;
-  backdrop-filter: blur(10px);
-  border: 2px solid rgba(255, 193, 7, 0.3);
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
-  z-index: 10;
+  min-width: 280px;
+  backdrop-filter: blur(15px);
+  border: 2px solid rgba(255, 193, 7, 0.4);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.7);
+  z-index: 99;
+  overflow: hidden;
+}
+
+#adminPanelHeader {
+  background: linear-gradient(135deg, rgba(255, 193, 7, 0.8), rgba(255, 152, 0, 0.8));
+  padding: 10px 15px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  color: #000;
+  font-weight: bold;
+  font-size: 14px;
+  user-select: none;
+}
+
+#adminDragHandle {
+  cursor: move;
+  font-size: 18px;
+  padding: 0 5px;
+}
+
+#adminCloseBtn {
+  cursor: pointer;
+  font-size: 18px;
+  padding: 0 5px;
+  transition: transform 0.2s;
+}
+
+#adminCloseBtn:hover {
+  transform: scale(1.2);
+  color: #f00;
+}
+
+#adminPanelContent {
+  padding: 15px;
 }
 
 #adminInput {
   width: 100%;
-  padding: 8px;
-  margin-bottom: 8px;
+  padding: 10px;
+  margin-bottom: 10px;
   background: rgba(255, 255, 255, 0.1);
   border: 1px solid rgba(255, 193, 7, 0.3);
   border-radius: 5px;
   color: #fff;
-  font-size: 12px;
+  font-size: 13px;
   outline: none;
 }
 
@@ -202,20 +268,21 @@ body {
 
 #adminLoginBtn {
   width: 100%;
-  padding: 8px;
+  padding: 10px;
   background: #FFC107;
   color: #000;
   border: none;
   border-radius: 5px;
   cursor: pointer;
   font-weight: bold;
-  font-size: 12px;
+  font-size: 13px;
   margin-bottom: 10px;
   transition: all 0.2s;
 }
 
 #adminLoginBtn:hover {
   background: #FFD54F;
+  transform: translateY(-2px);
 }
 
 #adminLoginBtn:disabled {
@@ -225,34 +292,35 @@ body {
 
 #adminControls h4 {
   color: #FFC107;
-  font-size: 14px;
-  margin-bottom: 10px;
+  font-size: 15px;
+  margin-bottom: 12px;
   text-align: center;
   border-bottom: 1px solid rgba(255, 193, 7, 0.3);
-  padding-bottom: 5px;
+  padding-bottom: 8px;
 }
 
 #adminControls button {
   width: 100%;
-  padding: 8px;
-  margin-bottom: 5px;
+  padding: 10px;
+  margin-bottom: 8px;
   background: rgba(78, 205, 196, 0.8);
   color: #000;
   border: none;
   border-radius: 5px;
   cursor: pointer;
   font-weight: bold;
-  font-size: 12px;
+  font-size: 13px;
   transition: all 0.2s;
 }
 
 #adminControls button:hover {
   background: rgba(78, 205, 196, 1);
-  transform: scale(1.02);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(78, 205, 196, 0.4);
 }
 
 #adminControls button:active {
-  transform: scale(0.98);
+  transform: translateY(0);
 }
 
 #removeBotBtn {
@@ -261,24 +329,25 @@ body {
 
 #removeBotBtn:hover {
   background: rgba(244, 67, 54, 1) !important;
+  box-shadow: 0 4px 12px rgba(244, 67, 54, 0.4) !important;
 }
 
 .admin-section {
-  margin-top: 10px;
-  padding-top: 10px;
+  margin-top: 12px;
+  padding-top: 12px;
   border-top: 1px solid rgba(255, 193, 7, 0.2);
 }
 
 #targetPlayerName,
 #foodAmount {
   width: 100%;
-  padding: 6px;
-  margin-bottom: 5px;
+  padding: 8px;
+  margin-bottom: 8px;
   background: rgba(255, 255, 255, 0.1);
   border: 1px solid rgba(255, 193, 7, 0.3);
   border-radius: 4px;
   color: #fff;
-  font-size: 11px;
+  font-size: 12px;
   outline: none;
 }
 
@@ -293,6 +362,7 @@ body {
 
 #modifyPlayerBtn:hover {
   background: rgba(156, 39, 176, 1) !important;
+  box-shadow: 0 4px 12px rgba(156, 39, 176, 0.4) !important;
 }
 
 /* ============================================
@@ -406,7 +476,6 @@ body {
   
   #leaderboard h3 {
     font-size: 14px;
-    margin-bottom: 8px;
   }
   
   #leaderboardList li {
@@ -414,11 +483,16 @@ body {
     padding: 5px 3px;
   }
   
+  #adminToggleBtn {
+    width: 40px;
+    height: 40px;
+    font-size: 20px;
+  }
+  
   #adminPanel {
-    top: 10px;
+    min-width: 240px;
+    top: 70px;
     left: 10px;
-    min-width: 180px;
-    padding: 10px;
   }
   
   #gameCanvas {
@@ -454,26 +528,7 @@ body {
 }
 
 /* ============================================
-   RESPONSIVE - TABLET
-   ============================================ */
-
-@media (min-width: 769px) and (max-width: 1024px) {
-  .loginBox h1 {
-    font-size: 42px;
-  }
-  
-  #nameInput,
-  #joinButton {
-    width: 280px;
-  }
-  
-  #leaderboard {
-    min-width: 180px;
-  }
-}
-
-/* ============================================
-   DESKTOP INFO OVERLAY
+   DESKTOP INFO
    ============================================ */
 
 @media (min-width: 769px) {
@@ -501,21 +556,13 @@ body {
    ============================================ */
 
 @keyframes fadeInOut {
-  0%, 100% {
-    opacity: 0.6;
-  }
-  50% {
-    opacity: 1;
-  }
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
 }
 
 @keyframes pulse {
-  0%, 100% {
-    transform: scale(1);
-  }
-  50% {
-    transform: scale(1.05);
-  }
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.05); }
 }
 
 #boostButton:not(.active) {
@@ -523,7 +570,7 @@ body {
 }
 
 /* ============================================
-   SCROLLBAR STYLING
+   SCROLLBAR
    ============================================ */
 
 #leaderboardList::-webkit-scrollbar {
@@ -542,80 +589,4 @@ body {
 
 #leaderboardList::-webkit-scrollbar-thumb:hover {
   background: rgba(78, 205, 196, 0.7);
-}
-
-/* ============================================
-   UTILITY CLASSES
-   ============================================ */
-
-.hidden {
-  display: none !important;
-}
-
-.fade-in {
-  animation: fadeIn 0.5s ease-in;
-}
-
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
-
-/* ============================================
-   MOBILE LANDSCAPE
-   ============================================ */
-
-@media (max-width: 768px) and (orientation: landscape) {
-  .loginBox h1 {
-    font-size: 28px;
-    margin-bottom: 15px;
-  }
-  
-  .loginBox {
-    padding: 20px;
-  }
-  
-  #nameInput,
-  #joinButton {
-    padding: 10px;
-    font-size: 16px;
-  }
-  
-  #leaderboard,
-  #adminPanel {
-    top: 5px;
-    padding: 8px;
-  }
-  
-  #joystickContainer,
-  #boostButton {
-    width: 80px;
-    height: 80px;
-    bottom: 15px;
-  }
-  
-  #joystickContainer {
-    left: 15px;
-  }
-  
-  #boostButton {
-    right: 15px;
-    font-size: 12px;
-  }
-  
-  #joystickBase {
-    width: 80px;
-    height: 80px;
-  }
-  
-  #joystickStick {
-    width: 32px;
-    height: 32px;
-    top: 24px;
-    left: 24px;
-  }
-   }
+     }
