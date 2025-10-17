@@ -1,5 +1,5 @@
 // ============================================
-// SCRIPT.JS - With Admin Panel
+// SCRIPT.JS - Ultra Optimized Client (Complete)
 // ============================================
 
 const loginScreen = document.getElementById('loginScreen');
@@ -28,10 +28,13 @@ let isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.
 let isBoosting = false;
 let isAdmin = false;
 
-// FPS
+// Performance optimizations
 let fps = 0;
 let frameCount = 0;
 let lastFpsUpdate = Date.now();
+
+// Canvas optimization
+ctx.imageSmoothingEnabled = false;
 
 function resizeCanvas() {
   canvas.width = window.innerWidth;
@@ -47,7 +50,8 @@ joinButton.addEventListener('click', () => {
     reconnectionDelay: 500,
     reconnectionAttempts: 10,
     transports: ['websocket', 'polling'],
-    timeout: 10000
+    upgrade: true,
+    rememberUpgrade: true
   });
   
   socket.on('connect', () => {
@@ -126,9 +130,10 @@ document.getElementById('modifyPlayerBtn').addEventListener('click', () => {
   }
 });
 
-// Input handling - IMMEDIATE RESPONSE
+// Input handling - THROTTLED
 let lastDirectionSend = 0;
 let pendingDirection = null;
+const DIRECTION_THROTTLE = 50; // 50ms
 
 canvas.addEventListener('mousemove', (e) => {
   if (!myPlayerId || isMobile) return;
@@ -146,16 +151,18 @@ canvas.addEventListener('mousemove', (e) => {
   
   if (len > 10) {
     pendingDirection = { x: dx / len, y: dy / len };
-    
-    const now = Date.now();
-    if (now - lastDirectionSend > 30) { // 30ms throttle
-      if (pendingDirection && socket) {
-        socket.emit('changeDirection', pendingDirection);
-        lastDirectionSend = now;
-      }
-    }
   }
 });
+
+// Send direction updates in animation frame
+function sendDirectionUpdate() {
+  const now = Date.now();
+  if (pendingDirection && now - lastDirectionSend > DIRECTION_THROTTLE && socket) {
+    socket.emit('changeDirection', pendingDirection);
+    lastDirectionSend = now;
+    pendingDirection = null;
+  }
+}
 
 canvas.addEventListener('mousedown', (e) => {
   if (!myPlayerId || isMobile || e.button !== 0) return;
@@ -199,7 +206,7 @@ boostButton.addEventListener('touchend', (e) => {
   if (socket) socket.emit('boost', false);
 });
 
-// Joystick - IMMEDIATE RESPONSE
+// Joystick
 let joystickActive = false;
 let joystickCenter = { x: 0, y: 0 };
 
@@ -233,12 +240,6 @@ function handleJoystickMove(e) {
   if (distance > 10) {
     const len = Math.hypot(dx, dy);
     pendingDirection = { x: dx / len, y: dy / len };
-    
-    const now = Date.now();
-    if (now - lastDirectionSend > 30 && socket) {
-      socket.emit('changeDirection', pendingDirection);
-      lastDirectionSend = now;
-    }
   }
 }
 
@@ -259,8 +260,8 @@ function updateCamera() {
   if (!player) return;
   
   const head = player.s[0];
-  camera.x += (head.x - camera.x) * 0.15; // Daha hizli kamera
-  camera.y += (head.y - camera.y) * 0.15;
+  camera.x += (head.x - camera.x) * 0.2;
+  camera.y += (head.y - camera.y) * 0.2;
 }
 
 function updateLeaderboard() {
@@ -347,13 +348,17 @@ function drawSnake(player, isMe) {
     const screenX = seg.x - camera.x + halfW;
     const screenY = seg.y - camera.y + halfH;
     
+    // Viewport culling
+    if (screenX < -20 || screenX > canvas.width + 20 || 
+        screenY < -20 || screenY > canvas.height + 20) continue;
+    
     const size = player.b && isMe ? 9 : 10;
     
     ctx.fillStyle = player.c;
     ctx.strokeStyle = isMe ? '#fff' : 'rgba(0, 0, 0, 0.3)';
     ctx.lineWidth = isMe ? 2 : 1;
     
-    if (player.b && isMe && i % 2 === 0) {
+    if (player.b && isMe && i % 3 === 0) {
       ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
       ctx.beginPath();
       ctx.arc(screenX, screenY, 12, 0, 6.28);
@@ -404,6 +409,10 @@ function drawFPS() {
       ctx.fillText('BOOST!', 10, 65);
     }
   }
+  
+  const playerCount = Object.keys(gameState.p).length;
+  ctx.fillStyle = '#4ECDC4';
+  ctx.fillText('Players: ' + playerCount, 10, 85);
 }
 
 function render() {
@@ -415,6 +424,8 @@ function render() {
     frameCount = 0;
     lastFpsUpdate = now;
   }
+  
+  sendDirectionUpdate();
   
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   
